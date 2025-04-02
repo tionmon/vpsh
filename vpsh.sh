@@ -1,6 +1,7 @@
 #!/bin/bash
 
 echo "请选择要执行的脚本："
+echo "0. t"
 echo "1. kejilion"
 echo "2. reinstall"
 echo "3. jpso"
@@ -24,6 +25,11 @@ echo "16. NodeQuality"
 read -p "请输入序号：" choice
 
 case $choice in
+    0)
+        echo "执行t脚本"
+        # 这里替换为实际的t脚本命令
+        echo "alias t='./vpsh.sh'" >> ~/.bashrc && source ~/.bashrc
+        ;;
     1)
         echo "执行kejilion脚本"
         bash <(curl -sL kejilion.sh)
