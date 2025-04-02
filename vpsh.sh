@@ -1,10 +1,10 @@
 #!/bin/bash
 
 echo "请选择要执行的脚本："
-echo "1. 科技脚本"
-echo "2. 重装脚本"
-echo "3. 解锁脚本"
-echo "4. 更新脚本"
+echo "1. kejilion"
+echo "2. reinstall"
+echo "3. jpso"
+echo "4. update"
 echo "5. realm"
 echo "6. nezha"
 echo "7. xui"
