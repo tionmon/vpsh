@@ -25,7 +25,7 @@ read -p "请输入序号：" choice
 
 case $choice in
     1)
-        echo "执行科技脚本"
+        echo "执行kejilion脚本"
         bash <(curl -sL kejilion.sh)
         ;;
     2)
@@ -52,7 +52,7 @@ case $choice in
         esac
         ;;
     3)
-        echo "执行解锁脚本"
+        echo "执行解锁检测脚本"
         # 这里替换为实际的解锁脚本命令
         bash <(curl -L -s check.unlock.media)
         ;;
@@ -62,7 +62,7 @@ case $choice in
         apt update -y&&apt install -y curl&&apt install -y socat
         ;;
     5)
-        echo "请选择重装脚本的类型："
+        echo "请选择realm脚本的类型："
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
@@ -85,7 +85,7 @@ case $choice in
         esac
         ;;
     6)
-        echo "请选择重装脚本的类型："
+        echo "请选择nezha脚本的类型："
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
@@ -108,7 +108,7 @@ case $choice in
         esac
         ;;
     7)
-        echo "请选择重装脚本的类型："
+        echo "请选择xui脚本的类型："
         echo "1. 3xui"
         echo "2. 3xui-"
         echo "3. xuiv6"
@@ -157,7 +157,7 @@ case $choice in
         curl https://scholar.google.com.hk/
         ;;
     12)
-        echo "请选择重装脚本的类型："
+        echo "请选择key脚本的类型："
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
