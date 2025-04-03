@@ -18,6 +18,7 @@ echo "13. jiguang"
 echo "14. NetQuality"
 echo "15. armnetwork"
 echo "16. NodeQuality"
+echo "17. snell"
 
 
 
@@ -204,6 +205,11 @@ case $choice in
         echo "执行NodeQuality脚本"
         # 这里替换为实际的更新脚本命令
         bash <(curl -sL https://run.NodeQuality.com)
+        ;;
+    17)
+        echo "执行snell脚本"
+        # 这里替换为实际的更新脚本命令
+        wget -q https://raw.githubusercontent.com/passeway/Snell/main/Snell.sh -O Snell.sh && chmod +x Snell.sh && ./Snell.sh
         ;;
     *)
         echo "无效的选择，请重新运行脚本并选择正确的序号。"
