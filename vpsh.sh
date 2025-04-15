@@ -19,6 +19,8 @@ echo "14. NetQuality"
 echo "15. armnetwork"
 echo "16. NodeQuality"
 echo "17. snell"
+echo "18. msdocker"
+echo "17. indocker"
 
 
 
@@ -210,6 +212,16 @@ case $choice in
         echo "执行snell脚本"
         # 这里替换为实际的更新脚本命令
         wget -q https://raw.githubusercontent.com/passeway/Snell/main/Snell.sh -O Snell.sh && chmod +x Snell.sh && ./Snell.sh
+        ;;
+    18)
+        echo "执行msdocker脚本"
+        # 这里替换为实际的更新脚本命令
+        curl -s https://static.1ms.run/1ms-helper/scripts/install.sh | bash /dev/stdin config:account
+        ;;
+    19)
+        echo "国内安装docker"
+        # 这里替换为实际的更新脚本命令
+        bash <(curl -f -s --connect-timeout 10 --retry 3 https://linuxmirrors.cn/docker.sh) --source mirrors.tencent.com/docker-ce --source-registry docker.1ms.run --protocol https --install-latested true --close-firewall false --ignore-backup-tips
         ;;
     *)
         echo "无效的选择，请重新运行脚本并选择正确的序号。"
