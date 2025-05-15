@@ -2,13 +2,13 @@
 
 # 检测终端是否支持颜色
 if [ -t 1 ] && command -v tput > /dev/null && [ $(tput colors) -ge 8 ]; then
-    # 定义颜色变量
-    RED="$(tput setaf 1)"
-    GREEN="$(tput setaf 2)"
-    YELLOW="$(tput setaf 3)"
-    BLUE="$(tput setaf 4)"
-    MAGENTA="$(tput setaf 5)"
-    CYAN="$(tput setaf 6)"
+    # 定义颜色变量 - 优化后的颜色配置，提高在light模式下的可读性
+    RED="$(tput setaf 1)$(tput bold)"
+    GREEN="$(tput setaf 2)$(tput bold)"
+    YELLOW="$(tput setaf 3)$(tput bold)"
+    BLUE="$(tput setaf 4)$(tput bold)"
+    MAGENTA="$(tput setaf 5)$(tput bold)"
+    CYAN="$(tput setaf 6)$(tput bold)"
     WHITE="$(tput setaf 7)$(tput bold)"
     BOLD="$(tput bold)"
     RESET="$(tput sgr0)"
@@ -66,7 +66,8 @@ show_option() {
     local arrow_index=$(( $number % ${#arrow_styles[@]} ))
     local arrow_style=${arrow_styles[$arrow_index]}
     
-    printf "${CYAN}|${RESET}  ${YELLOW}%-4s${RESET}${WHITE}%-10s${RESET}${MAGENTA}%s${RESET} ${GREEN}%-$(( BORDER_WIDTH - 30 ))s${RESET}${CYAN}|${RESET}\n" "$number." "$description" "$arrow_style" "$short_desc"
+    # 优化显示格式，提高light模式下的可读性
+    printf "${CYAN}|${RESET}  ${YELLOW}%-4s${RESET}${BOLD}%-10s${RESET}${MAGENTA}%s${RESET} ${GREEN}%-$(( BORDER_WIDTH - 30 ))s${RESET}${CYAN}|${RESET}\n" "$number." "$description" "$arrow_style" "$short_desc"
 }
 
 # 显示标题
