@@ -97,8 +97,7 @@ show_option "14" "NetQuality" "网络质量测试"
 show_option "15" "armnetwork" "ARM网络配置"
 show_option "16" "NodeQuality" "节点质量测试"
 show_option "17" "snell" "Snell服务器安装"
-show_option "18" "msdocker" "1ms Docker助手"
-show_option "19" "indocker" "国内Docker安装"
+show_option "18" "docker" "Docker相关工具"
 
 draw_line
 
@@ -319,14 +318,58 @@ case $choice in
         wget -q https://raw.githubusercontent.com/passeway/Snell/main/Snell.sh -O Snell.sh && chmod +x Snell.sh && ./Snell.sh
         ;;
     18)
-        echo "执行msdocker脚本"
-        # 这里替换为实际的更新脚本命令
-        curl -s https://static.1ms.run/1ms-helper/scripts/install.sh | bash /dev/stdin config:account
-        ;;
-    19)
-        echo "国内安装docker"
-        # 这里替换为实际的更新脚本命令
-        bash <(curl -f -s --connect-timeout 10 --retry 3 https://linuxmirrors.cn/docker.sh) --source mirrors.tencent.com/docker-ce --source-registry docker.1ms.run --protocol https --install-latested true --close-firewall false --ignore-backup-tips
+        echo "请选择Docker相关工具："
+        echo "0. 返回上一级菜单"
+        echo "1. 1ms Docker助手"
+        echo "2. 国内Docker安装"
+        echo "3. Docker + Docker Compose 一键安装"
+        read -p "请输入序号：" sub_choice
+
+        case $sub_choice in
+            0)
+                # 返回主菜单
+                exec $0
+                ;;
+            1)
+                echo "执行1ms Docker助手脚本"
+                # 这里替换为实际的更新脚本命令
+                curl -s https://static.1ms.run/1ms-helper/scripts/install.sh | bash /dev/stdin config:account
+                ;;
+            2)
+                echo "国内安装Docker"
+                # 这里替换为实际的更新脚本命令
+                bash <(curl -f -s --connect-timeout 10 --retry 3 https://linuxmirrors.cn/docker.sh) --source mirrors.tencent.com/docker-ce --source-registry docker.1ms.run --protocol https --install-latested true --close-firewall false --ignore-backup-tips
+                ;;
+            3)
+                echo "一键安装 Docker + Docker Compose"
+                # 安装Docker
+                apt update -y
+                apt install -y apt-transport-https ca-certificates curl gnupg lsb-release
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+                apt update -y
+                apt install -y docker-ce docker-ce-cli containerd.io
+                
+                # 安装Docker Compose
+                curl -L "https://github.com/docker/compose/releases/download/v2.18.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                chmod +x /usr/local/bin/docker-compose
+                
+                # 验证安装
+                echo "检查Docker和Docker Compose安装状态："
+                docker --version
+                docker-compose --version
+                
+                # 启动Docker并设置开机自启
+                systemctl start docker
+                systemctl enable docker
+                
+                echo "Docker和Docker Compose安装完成!"
+                ;;
+            *)
+                echo "无效的选择，请重新运行脚本并选择正确的序号。"
+                exit 1
+                ;;
+        esac
         ;;
     *)
         echo "无效的选择，请重新运行脚本并选择正确的序号。"
