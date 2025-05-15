@@ -54,10 +54,19 @@ center_text() {
 }
 
 # 创建选项显示函数
+# 箭头样式数组
+arrow_styles=("→→→" "➔ " "➡️ " "⇨ " "⇒ " "⮞⮞⮞" "➜ " "➙ " "➸ " "⮕ ")
+
 show_option() {
     local number="$1"
     local description="$2"
-    printf "${CYAN}|${RESET}  ${YELLOW}%-4s${RESET}${WHITE}%-$(( BORDER_WIDTH - 10 ))s${RESET}${CYAN}|${RESET}\n" "$number." "$description"
+    local short_desc="$3"
+    
+    # 根据序号选择箭头样式，循环使用
+    local arrow_index=$(( $number % ${#arrow_styles[@]} ))
+    local arrow_style=${arrow_styles[$arrow_index]}
+    
+    printf "${CYAN}|${RESET}  ${YELLOW}%-4s${RESET}${WHITE}%-10s${RESET}${MAGENTA}%s${RESET} ${GREEN}%-$(( BORDER_WIDTH - 30 ))s${RESET}${CYAN}|${RESET}\n" "$number." "$description" "$arrow_style" "$short_desc"
 }
 
 # 显示标题
@@ -69,26 +78,26 @@ draw_line
 printf "${CYAN}|${GREEN}${BOLD} 请选择要执行的脚本：${RESET}%$(( BORDER_WIDTH - 24 ))s${CYAN}|${RESET}\n" ""
 draw_line
 
-show_option "0" "t"
-show_option "1" "kejilion"
-show_option "2" "reinstall"
-show_option "3" "jpso"
-show_option "4" "update"
-show_option "5" "realm"
-show_option "6" "nezha"
-show_option "7" "xui"
-show_option "8" "toolbasic"
-show_option "9" "onekey"
-show_option "10" "backtrace"
-show_option "11" "gg_test"
-show_option "12" "key.sh"
-show_option "13" "jiguang"
-show_option "14" "NetQuality"
-show_option "15" "armnetwork"
-show_option "16" "NodeQuality"
-show_option "17" "snell"
-show_option "18" "msdocker"
-show_option "19" "indocker"
+show_option "0" "t" "快捷别名设置"
+show_option "1" "kejilion" "科技lion一键脚本"
+show_option "2" "reinstall" "系统重装工具"
+show_option "3" "jpso" "流媒体解锁检测"
+show_option "4" "update" "系统更新与工具安装"
+show_option "5" "realm" "Realm部署工具"
+show_option "6" "nezha" "哪吒监控面板"
+show_option "7" "xui" "X-UI面板安装"
+show_option "8" "toolbasic" "基础工具安装"
+show_option "9" "onekey" "V2Ray WSS一键安装"
+show_option "10" "backtrace" "回溯工具"
+show_option "11" "gg_test" "Google连通性测试"
+show_option "12" "key.sh" "SSH密钥管理"
+show_option "13" "jiguang" "极光面板安装"
+show_option "14" "NetQuality" "网络质量测试"
+show_option "15" "armnetwork" "ARM网络配置"
+show_option "16" "NodeQuality" "节点质量测试"
+show_option "17" "snell" "Snell服务器安装"
+show_option "18" "msdocker" "1ms Docker助手"
+show_option "19" "indocker" "国内Docker安装"
 
 draw_line
 

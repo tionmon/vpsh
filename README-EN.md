@@ -39,6 +39,32 @@ VPSH is a powerful script management tool that provides a clean and attractive c
 
 ## 🚀 Usage
 
+### 🔥 One-Command Installation
+
+Use the following command to download, install, and set up the alias in one go:
+
+```bash
+wget -O ~/vpsh.sh https://raw.githubusercontent.com/tionmon/vpsh/main/vpsh.sh \
+&& chmod +x ~/vpsh.sh \
+&& grep -qxF "alias t='./vpsh.sh'" ~/.bashrc || echo "alias t='./vpsh.sh'" >> ~/.bashrc \
+&& source ~/.bashrc
+```
+
+After execution, you can directly use the `t` command to launch the script.
+
+#### 🔸 Command Explanation
+
+| 🔹 Command Part | 🔹 Function Description |
+|:------------|:------------|
+| `wget -O ~/vpsh.sh ...` | 📥 Download the script from GitHub and save it to your home directory |
+| `chmod +x ~/vpsh.sh` | 🔑 Add execution permissions to the script |
+| `grep -qxF ... || echo ...` | 📝 Intelligently check and add the alias, avoiding duplicates |
+| `source ~/.bashrc` | ✨ Apply the new alias settings immediately |
+
+> 💡 **Tip**: After execution, you only need to type `t` to start the script, without entering the full path.
+
+### 📚 Manual Installation Steps
+
 1. Download the script:
    ```bash
    wget -O vpsh.sh https://raw.githubusercontent.com/tionmon/vpsh/main/vpsh.sh

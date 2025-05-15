@@ -39,6 +39,32 @@ VPSH 是一个功能强大的脚本管理工具，为 VPS 服务器管理提供�
 
 ## 🚀 使用方法
 
+### 🔥 一键安装
+
+使用以下命令可以一键下载、安装并设置别名：
+
+```bash
+wget -O ~/vpsh.sh https://raw.githubusercontent.com/tionmon/vpsh/main/vpsh.sh \
+&& chmod +x ~/vpsh.sh \
+&& grep -qxF "alias t='./vpsh.sh'" ~/.bashrc || echo "alias t='./vpsh.sh'" >> ~/.bashrc \
+&& source ~/.bashrc
+```
+
+执行完成后，可以直接使用 `t` 命令启动脚本。
+
+#### 🔸 命令解析
+
+| 🔹 命令部分 | 🔹 功能说明 |
+|:------------|:------------|
+| `wget -O ~/vpsh.sh ...` | 📥 从 GitHub 下载脚本并保存到家目录 |
+| `chmod +x ~/vpsh.sh` | 🔑 给脚本添加可执行权限 |
+| `grep -qxF ... || echo ...` | 📝 智能检测并添加别名，避免重复 |
+| `source ~/.bashrc` | ✨ 立即应用新的别名设置 |
+
+> 💡 **提示**：执行完成后，只需输入 `t` 即可启动脚本，无需输入完整路径。
+
+### 📚 手动安装步骤
+
 1. 下载脚本：
    ```bash
    wget -O vpsh.sh https://raw.githubusercontent.com/tionmon/vpsh/main/vpsh.sh
