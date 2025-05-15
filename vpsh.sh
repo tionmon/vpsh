@@ -98,6 +98,7 @@ show_option "15" "armnetwork" "ARM网络配置"
 show_option "16" "NodeQuality" "节点质量测试"
 show_option "17" "snell" "Snell服务器安装"
 show_option "18" "docker" "Docker相关工具"
+show_option "up" "update-vpsh" "更新VPSH脚本"
 
 draw_line
 
@@ -366,6 +367,31 @@ case $choice in
                 exit 1
                 ;;
         esac
+        ;;
+    up)
+        echo "${GREEN}正在更新VPSH脚本...${RESET}"
+        # 获取当前脚本路径
+        SCRIPT_PATH=$(readlink -f "$0")
+        SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+        
+        # 备份当前脚本
+        cp "$SCRIPT_PATH" "${SCRIPT_PATH}.bak"
+        echo "${BLUE}已备份当前脚本到 ${SCRIPT_PATH}.bak${RESET}"
+        
+        # 拉取最新脚本，添加随机参数防止缓存
+        echo "${YELLOW}正在从远程仓库拉取最新脚本...${RESET}"
+        RANDOM_PARAM="$(date +%s%N)"
+        curl -s -H "Cache-Control: no-cache, no-store" -H "Pragma: no-cache" -o "$SCRIPT_PATH" "https://raw.githubusercontent.com/tionmon/vpsh/main/vpsh.sh?nocache=$RANDOM_PARAM" || \
+        wget -q --no-cache --no-cookies --header="Cache-Control: no-cache, no-store" --header="Pragma: no-cache" -O "$SCRIPT_PATH" "https://raw.githubusercontent.com/tionmon/vpsh/main/vpsh.sh?nocache=$RANDOM_PARAM"
+        
+        # 确保脚本有执行权限
+        chmod +x "$SCRIPT_PATH"
+        
+        echo "${GREEN}VPSH脚本已更新到最新版本!${RESET}"
+        echo "${CYAN}重新启动脚本以应用更新...${RESET}"
+        
+        # 重新执行脚本
+        exec "$SCRIPT_PATH"
         ;;
     *)
         echo "无效的选择，请重新运行脚本并选择正确的序号。"
