@@ -1,31 +1,87 @@
 #!/bin/bash
 
-echo "请选择要执行的脚本："
-echo "0. t"
-echo "1. kejilion"
-echo "2. reinstall"
-echo "3. jpso"
-echo "4. update"
-echo "5. realm"
-echo "6. nezha"
-echo "7. xui"
-echo "8. toolbasic"
-echo "9. onekey"
-echo "10. backtrace"
-echo "11. gg_test"
-echo "12. key.sh"
-echo "13. jiguang"
-echo "14. NetQuality"
-echo "15. armnetwork"
-echo "16. NodeQuality"
-echo "17. snell"
-echo "18. msdocker"
-echo "19. indocker"
+# 定义颜色变量
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+BLUE="\033[0;34m"
+MAGENTA="\033[0;35m"
+CYAN="\033[0;36m"
+WHITE="\033[1;37m"
+BOLD="\033[1m"
+RESET="\033[0m"
 
+# 清屏
+clear
 
+# 获取终端宽度
+TERM_WIDTH=$(tput cols)
 
+# 如果终端宽度未知或太小，设置一个默认值
+if [ -z "$TERM_WIDTH" ] || [ "$TERM_WIDTH" -lt 60 ]; then
+    TERM_WIDTH=60
+fi
 
-read -p "请输入序号：" choice
+# 计算边框宽度
+BORDER_WIDTH=$TERM_WIDTH
+
+# 创建分隔线函数
+draw_line() {
+    printf "${CYAN}%${BORDER_WIDTH}s${RESET}\n" | tr ' ' '═'
+}
+
+# 创建居中文本函数
+center_text() {
+    local text="$1"
+    local color="$2"
+    local text_length=${#text}
+    local padding=$(( (BORDER_WIDTH - text_length) / 2 ))
+    printf "${CYAN}║${RESET}%${padding}s${color}${BOLD}%s${RESET}%${padding}s${CYAN}║${RESET}\n" "" "$text" ""
+}
+
+# 创建选项显示函数
+show_option() {
+    local number="$1"
+    local description="$2"
+    printf "${CYAN}║${RESET}  ${YELLOW}%-4s${RESET}${WHITE}%-$(( BORDER_WIDTH - 10 ))s${RESET}${CYAN}║${RESET}\n" "$number." "$description"
+}
+
+# 显示标题
+draw_line
+center_text "VPSH 脚本管理面板" "${MAGENTA}"
+draw_line
+
+# 显示选项
+printf "${CYAN}║${GREEN}${BOLD} 请选择要执行的脚本：${RESET}%$(( BORDER_WIDTH - 24 ))s${CYAN}║${RESET}\n" ""
+draw_line
+
+show_option "0" "t"
+show_option "1" "kejilion"
+show_option "2" "reinstall"
+show_option "3" "jpso"
+show_option "4" "update"
+show_option "5" "realm"
+show_option "6" "nezha"
+show_option "7" "xui"
+show_option "8" "toolbasic"
+show_option "9" "onekey"
+show_option "10" "backtrace"
+show_option "11" "gg_test"
+show_option "12" "key.sh"
+show_option "13" "jiguang"
+show_option "14" "NetQuality"
+show_option "15" "armnetwork"
+show_option "16" "NodeQuality"
+show_option "17" "snell"
+show_option "18" "msdocker"
+show_option "19" "indocker"
+
+draw_line
+
+# 读取用户输入
+printf "${CYAN}║${RESET} ${GREEN}请输入序号：${RESET} "
+read choice
+
 
 case $choice in
     0)
