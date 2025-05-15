@@ -344,11 +344,7 @@ case $choice in
                 echo "一键安装 Docker + Docker Compose"
                 # 安装Docker
                 apt update -y
-                apt install -y apt-transport-https ca-certificates curl gnupg lsb-release
-                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-                apt update -y
-                apt install -y docker-ce docker-ce-cli containerd.io
+                sudo curl -sSL get.docker.com | sh
                 
                 # 安装Docker Compose
                 curl -L "https://github.com/docker/compose/releases/download/v2.18.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
