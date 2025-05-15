@@ -119,11 +119,16 @@ case $choice in
         ;;
     2)
         echo "请选择重装脚本的类型："
+        echo "0. 返回上一级菜单"
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
 
         case $sub_choice in
+            0)
+                # 返回主菜单
+                exec $0
+                ;;
             1)
                 echo "执行国内重装脚本"
                 # 这里替换为实际的国内重装脚本命令
@@ -152,11 +157,16 @@ case $choice in
         ;;
     5)
         echo "请选择realm脚本的类型："
+        echo "0. 返回上一级菜单"
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
 
         case $sub_choice in
+            0)
+                # 返回主菜单
+                exec $0
+                ;;
             1)
                 echo "执行国内重装脚本"
                 # 这里替换为实际的国内重装脚本命令
@@ -175,11 +185,16 @@ case $choice in
         ;;
     6)
         echo "请选择nezha脚本的类型："
+        echo "0. 返回上一级菜单"
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
 
         case $sub_choice in
+            0)
+                # 返回主菜单
+                exec $0
+                ;;
             1)
                 echo "执行国内重装脚本"
                 # 这里替换为实际的国内重装脚本命令
@@ -198,12 +213,17 @@ case $choice in
         ;;
     7)
         echo "请选择xui脚本的类型："
+        echo "0. 返回上一级菜单"
         echo "1. 3xui"
         echo "2. 3xui-"
         echo "3. xuiv6"
         read -p "请输入序号：" sub_choice
 
         case $sub_choice in
+            0)
+                # 返回主菜单
+                exec $0
+                ;;
             1)
                 echo "执行3xui脚本"
                 # 这里替换为实际的国内重装脚本命令
@@ -247,11 +267,16 @@ case $choice in
         ;;
     12)
         echo "请选择key脚本的类型："
+        echo "0. 返回上一级菜单"
         echo "1. 国内"
         echo "2. 国外"
         read -p "请输入序号：" sub_choice
 
         case $sub_choice in
+            0)
+                # 返回主菜单
+                exec $0
+                ;;
             1)
                 echo "执行国内key脚本"
                 # 这里替换为实际的国内重装脚本命令
