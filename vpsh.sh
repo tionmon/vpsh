@@ -1,15 +1,29 @@
 #!/bin/bash
 
-# 定义颜色变量
-RED="\033[0;31m"
-GREEN="\033[0;32m"
-YELLOW="\033[0;33m"
-BLUE="\033[0;34m"
-MAGENTA="\033[0;35m"
-CYAN="\033[0;36m"
-WHITE="\033[1;37m"
-BOLD="\033[1m"
-RESET="\033[0m"
+# 检测终端是否支持颜色
+if [ -t 1 ] && command -v tput > /dev/null && [ $(tput colors) -ge 8 ]; then
+    # 定义颜色变量
+    RED="$(tput setaf 1)"
+    GREEN="$(tput setaf 2)"
+    YELLOW="$(tput setaf 3)"
+    BLUE="$(tput setaf 4)"
+    MAGENTA="$(tput setaf 5)"
+    CYAN="$(tput setaf 6)"
+    WHITE="$(tput setaf 7)$(tput bold)"
+    BOLD="$(tput bold)"
+    RESET="$(tput sgr0)"
+else
+    # 如果不支持颜色，则使用空字符串
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    MAGENTA=""
+    CYAN=""
+    WHITE=""
+    BOLD=""
+    RESET=""
+fi
 
 # 清屏
 clear
@@ -27,7 +41,7 @@ BORDER_WIDTH=$TERM_WIDTH
 
 # 创建分隔线函数
 draw_line() {
-    printf "${CYAN}%${BORDER_WIDTH}s${RESET}\n" | tr ' ' '═'
+    printf "${CYAN}+%${BORDER_WIDTH}s+${RESET}\n" | tr ' ' '-'
 }
 
 # 创建居中文本函数
@@ -36,14 +50,14 @@ center_text() {
     local color="$2"
     local text_length=${#text}
     local padding=$(( (BORDER_WIDTH - text_length) / 2 ))
-    printf "${CYAN}║${RESET}%${padding}s${color}${BOLD}%s${RESET}%${padding}s${CYAN}║${RESET}\n" "" "$text" ""
+    printf "${CYAN}|${RESET}%${padding}s${color}${BOLD}%s${RESET}%${padding}s${CYAN}|${RESET}\n" "" "$text" ""
 }
 
 # 创建选项显示函数
 show_option() {
     local number="$1"
     local description="$2"
-    printf "${CYAN}║${RESET}  ${YELLOW}%-4s${RESET}${WHITE}%-$(( BORDER_WIDTH - 10 ))s${RESET}${CYAN}║${RESET}\n" "$number." "$description"
+    printf "${CYAN}|${RESET}  ${YELLOW}%-4s${RESET}${WHITE}%-$(( BORDER_WIDTH - 10 ))s${RESET}${CYAN}|${RESET}\n" "$number." "$description"
 }
 
 # 显示标题
@@ -52,7 +66,7 @@ center_text "VPSH 脚本管理面板" "${MAGENTA}"
 draw_line
 
 # 显示选项
-printf "${CYAN}║${GREEN}${BOLD} 请选择要执行的脚本：${RESET}%$(( BORDER_WIDTH - 24 ))s${CYAN}║${RESET}\n" ""
+printf "${CYAN}|${GREEN}${BOLD} 请选择要执行的脚本：${RESET}%$(( BORDER_WIDTH - 24 ))s${CYAN}|${RESET}\n" ""
 draw_line
 
 show_option "0" "t"
@@ -79,7 +93,7 @@ show_option "19" "indocker"
 draw_line
 
 # 读取用户输入
-printf "${CYAN}║${RESET} ${GREEN}请输入序号：${RESET} "
+printf "${CYAN}|${RESET} ${GREEN}请输入序号：${RESET} "
 read choice
 
 
