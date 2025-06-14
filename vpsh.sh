@@ -98,6 +98,7 @@ show_option "15" "armnetwork" "ARM网络配置"
 show_option "16" "NodeQuality" "节点质量测试"
 show_option "17" "snell" "Snell服务器安装"
 show_option "18" "docker" "Docker相关工具"
+show_option "19" "caddy" "Caddy服务器安装"
 show_option "up" "update-vpsh" "更新VPSH脚本"
 
 draw_line
@@ -368,6 +369,36 @@ case $choice in
                 ;;
         esac
         ;;
+    19)
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Ensure the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root. Please use sudo or switch to the root user." >&2
+  exit 1
+fi
+
+# Update package lists and install prerequisites
+apt update
+apt install -y debian-keyring debian-archive-keyring apt-transport-https curl gnupg
+
+# Add the Caddy GPG key
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+
+# Add the Caddy repository
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | tee /etc/apt/sources.list.d/caddy-stable.list
+
+# Update package lists and install Caddy
+apt update
+apt install -y caddy
+
+echo "Caddy installation complete. You can now start and enable the service with:"
+echo "  systemctl enable --now caddy"
+    ;;
     up)
         echo "${GREEN}正在更新VPSH脚本...${RESET}"
         # 获取当前脚本路径
