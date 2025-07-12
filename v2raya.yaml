@@ -1,0 +1,18 @@
+services:
+  v2raya:
+    container_name: v2raya
+    restart: always
+    network_mode: "host"
+    privileged: true
+    environment:
+      - V2RAYA_CONFIG:/etc/v2raya
+      - V2RAYA_ADDRESS=0.0.0.0:2017
+      - V2RAYA_PLUGINLISTENPORT:32346
+      - V2RAYA_V2RAY_BIN=/usr/local/bin/v2ray
+    volumes:
+      - ./data/v2raya:/etc/v2raya
+      - /lib/modules:/lib/modules:ro
+      - /etc/resolv.conf:/etc/resolv.conf
+    image: mzz2017/v2raya:latest
+    labels:  
+      createdBy: "Apps"
