@@ -34,7 +34,7 @@ else
 fi
 
 # 安装docker
-./a.sh
+curl -fsSL https://gh-proxy.com/raw.githubusercontent.com/docker/docker-install/master/install.sh | bash
 
 # 下载 docker-compose-linux-x86_64 到 /usr/local/bin/ 命名为 docker-compose
 curl -L -o /usr/local/bin/docker-compose https://gh-proxy.com/https://github.com/docker/compose/releases/download/v2.38.2/docker-compose-linux-x86_64
