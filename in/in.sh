@@ -24,7 +24,7 @@ if [ ! -d "/etc/docker" ]; then
 fi
 
 # 创建 /etc/docker/daemon.json 文件并添加内容
-echo '{"registry-mirrors": ["https://docker.1panel.live"]}' > /etc/docker/daemon.json
+echo '{"registry-mirrors": ["https://docker.1ms.run","https://docker.ketches.cn","https://docker.1panel.top","https://proxy.1panel.live","https://dockerproxy.1panel.live","https://docker.1panel.live","https://docker.1panelproxy.com","https://dockerproxy.net","https://docker-registry.nmqu.com","https://hub1.nat.tf"]}' > /etc/docker/daemon.json
 
 # 检查文件是否创建成功
 if [ $? -eq 0 ]; then
