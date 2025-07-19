@@ -27,6 +27,7 @@ then
     # 安装 Caddy
     echo "正在安装 Caddy..."
     sudo apt install -y caddy
+    systemctl enable caddy
 fi
 
 # 询问用户的域名或本地端口号
