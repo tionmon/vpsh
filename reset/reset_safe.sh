@@ -21,10 +21,10 @@ fi
 # 函数：询问确认
 ask_confirmation() {
     local message="$1"
-    read -p "$message (y/N): " choice
+    read -p "$message (Y/n): " choice
     case "$choice" in 
-        y|Y ) return 0;;
-        * ) return 1;;
+        n|N ) return 1;;
+        * ) return 0;;
     esac
 }
 

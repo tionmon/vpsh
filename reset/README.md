@@ -12,7 +12,7 @@
 
 ## 脚本说明
 
-### 1. `debian12_reset.sh` - 完整重置脚本
+### 1. `reset.sh` - 完整重置脚本
 
 这是一个全自动的系统重置脚本，会一次性执行所有清理操作。
 
@@ -31,12 +31,12 @@
 - 重置网络配置
 - 清理非必要的启动服务
 
-### 2. `debian12_reset_safe.sh` - 安全重置脚本
+### 2. `reset_safe.sh` - 安全重置脚本
 
 这是一个交互式的安全版本，会在每个主要步骤前询问确认。
 
 **特点：**
-- 每个操作前都会询问确认
+- 每个操作前都会询问确认（默认选择为Y，按回车即可执行）
 - 可以选择性地执行某些清理操作
 - 更适合初次使用或需要保留某些服务的情况
 - 降低误删重要数据的风险
@@ -50,20 +50,20 @@
 3. 为脚本添加执行权限：
 
 ```bash
-chmod +x debian12_reset.sh
-chmod +x debian12_reset_safe.sh
+chmod +x reset.sh
+chmod +x reset_safe.sh
 ```
 
 ### 执行脚本
 
 **推荐：先使用安全版本**
 ```bash
-sudo ./debian12_reset_safe.sh
+sudo ./reset_safe.sh
 ```
 
 **完整重置（谨慎使用）**
 ```bash
-sudo ./debian12_reset.sh
+sudo ./reset.sh
 ```
 
 ## 清理内容详细说明
