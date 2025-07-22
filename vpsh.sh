@@ -433,6 +433,39 @@ case $choice in
             fi
         fi
         ;;
+    18)
+        echo "执行Caddy反向代理配置脚本"
+        # 获取脚本目录
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        # 执行remby.sh脚本
+        if [ -f "$SCRIPT_DIR/sh/remby.sh" ]; then
+            bash "$SCRIPT_DIR/sh/remby.sh"
+        else
+            echo "remby.sh脚本未找到，正在从远程下载..."
+            # 创建sh目录（如果不存在）
+            mkdir -p "$SCRIPT_DIR/sh"
+            # 下载remby.sh脚本
+            if command -v curl &> /dev/null; then
+                curl -o "$SCRIPT_DIR/sh/remby.sh" https://raw.githubusercontent.com/tionmon/vpsh/refs/heads/main/sh/remby.sh
+            elif command -v wget &> /dev/null; then
+                wget -O "$SCRIPT_DIR/sh/remby.sh" https://raw.githubusercontent.com/tionmon/vpsh/refs/heads/main/sh/remby.sh
+            else
+                echo "错误：未找到curl或wget命令，无法下载脚本"
+                exit 1
+            fi
+            
+            # 检查下载是否成功
+            if [ -f "$SCRIPT_DIR/sh/remby.sh" ]; then
+                # 赋予执行权限
+                chmod +x "$SCRIPT_DIR/sh/remby.sh"
+                echo "remby.sh脚本下载完成，正在执行..."
+                bash "$SCRIPT_DIR/sh/remby.sh"
+            else
+                echo "错误：remby.sh脚本下载失败"
+                exit 1
+            fi
+        fi
+        ;;
     19)
         echo "执行环境初始化脚本"
         # 获取脚本目录
