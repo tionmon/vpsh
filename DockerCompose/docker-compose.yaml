@@ -1,0 +1,429 @@
+version: '3.8'
+
+services:
+  # Sub Store - 订阅转换服务
+  sub-store:
+    image: xream/sub-store:latest
+    container_name: sub-store
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "13001:3001"
+    environment:
+      SUB_STORE_PUSH_SERVICE: "https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]?group=SubStore&autoCopy=1&isArchive=1&sound=shake&level=timeSensitive&icon=https%3A%2F%2Fraw.githubusercontent.com%2F58xinian%2Ficon%2Fmaster%2FSub-Store1.png"
+      SUB_STORE_CRON: "55 23 * * *"
+      SUB_STORE_FRONTEND_BACKEND_PATH: "/TOKEN"
+    volumes:
+      - "./sub-store/data:/opt/app/data"
+    labels:
+      createdBy: "Apps"
+
+  # SubLinkX - 订阅链接转换
+  sublinkx:
+    image: jaaksi/sublinkx
+    container_name: sublinkx
+    restart: always
+    network_mode: bridge
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./sublinkx/db:/app/db
+      - ./sublinkx/template:/app/template
+      - ./sublinkx/logs:/app/logs
+
+  # Music Tag - 音乐标签管理
+  music-tag:
+    image: xhongc/music_tag_web:latest
+    container_name: music-tag-web
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    volumes:
+      - /volume1/music:/app/media:rw
+      - ./music-tag-web/config:/app/data
+
+  # Sync Clipboard - 剪贴板同步服务
+  syncclipboard-server:
+    image: jericx/syncclipboard-server:latest
+    container_name: syncclipboard
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "5033:5033"
+    volumes:
+      - ./syncclipboard/data/appsettings.json:/app/appsettings.json
+    labels:
+      createdBy: "Apps"
+
+  # Cookie Cloud - Cookie 同步服务
+  cookiecloud:
+    image: easychen/cookiecloud:latest
+    container_name: cookiecloud
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "8088:8088"
+    volumes:
+      - "./cookiecloud/data:/data/api/data"
+    environment:
+      - API_ROOT=./TOKEN
+    labels:
+      createdBy: "Apps"
+
+  # Sun Panel - 导航面板
+  sun-panel:
+    image: hslr/sun-panel:1.6.0
+    container_name: sun-panel
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./sun-panel/conf:/app/conf
+      - ./sun-panel/uploads:/app/uploads
+      - ./sun-panel/database:/app/database
+    labels:
+      createdBy: "Apps"
+
+  # MDC NG - 媒体数据收集
+  mdcng:
+    image: mdcng/mdc:latest
+    container_name: mdcng
+    restart: unless-stopped
+    ports:
+      - 9208:9208
+    volumes:
+      - ./mdcng/data:/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+    environment:
+      - PUID=0
+      - PGID=0
+
+  # Movie Pilot - 电影自动化管理
+  moviepilot:
+    image: jxxghp/moviepilot-v2:latest
+    container_name: moviepilot-v2
+    hostname: moviepilot-v2
+    restart: always
+    stdin_open: true
+    tty: true
+    network_mode: host
+    volumes:
+      - './moviepilot/media:/media'
+      - './moviepilot/config:/config'
+      - './moviepilot/core:/moviepilot/.cache/ms-playwright'
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    environment:
+      - 'NGINX_PORT=3000'
+      - 'PORT=33001'
+      - 'PUID=0'
+      - 'PGID=0'
+      - 'UMASK=000'
+      - 'TZ=Asia/Shanghai'
+      - 'SUPERUSER=Tionmon'
+
+  # Telegram Assistant - Telegram 助手
+  telegram-assistant:
+    image: shenxianmq/telegram_assistant:latest
+    container_name: telegram_assistant
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./telegram_assistant/config:/app/config
+      - ./telegram_assistant/downloads/telegram:/app/downloads/telegram
+      - ./telegram_assistant/downloads/youtube:/app/downloads/youtube
+      - ./telegram_assistant/downloads/douyin:/app/downloads/douyin
+      - ./telegram_assistant/downloads/bilibili:/app/downloads/bilibili
+      - ./telegram_assistant/downloads/temp:/app/temp
+
+  # Symedia - 媒体管理服务
+  symedia:
+    image: shenxianmq/symedia:latest
+    container_name: symedia
+    restart: always
+    network_mode: host
+    ports:
+      - "8095:8095"
+    volumes:
+      - ./symedia/config:/app/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - LICENSE_KEY=TOKEN
+    extra_hosts:
+      - "webapi.115.com:47.113.23.100"
+
+  # CloudDrive - 云盘挂载服务
+  clouddrive:
+    image: cloudnas/clouddrive2:0.8.14
+    container_name: clouddrive
+    restart: always
+    network_mode: host
+    pid: host
+    privileged: true
+    ports:
+      - "19798:19798"
+    environment:
+      - CLOUDDRIVE_HOME=/Config
+    volumes:
+      - ./clouddrive/config:/Config
+      - /volume1/CloudNAS:/volume1/CloudNAS:shared
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+    devices:
+      - /dev/fuse:/dev/fuse
+
+  # FastEmby - 快速 Emby 服务
+  fastemby:
+    image: shenxianmq/fastemby:latest
+    container_name: FastEmby
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Asia/Shanghai
+      - CHECKIN=0
+      - LICENSE_KEY=TOKEN
+    volumes:
+      - ./FastEmby/config:/app/config
+      - ./FastEmby/log:/app/log
+
+  # OpenList - 文件列表服务
+  openlist:
+    image: openlistteam/openlist:beta-aio
+    container_name: openlist
+    restart: always
+    ports:
+      - 5244:5244
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./alist:/opt/alist/data
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+
+  # HD Icons - 图标库服务
+  hd-icons:
+    image: xushier/hd-icons:latest
+    container_name: HD-Icons
+    ports:
+      - 50560:50560
+    volumes:
+      - ./HD-Icons/icons:/app/icons
+    environment:
+      - TITLE=Icons
+
+  # Emby - 媒体服务器
+  emby:
+    image: amilys/embyserver:beta
+    container_name: emby
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./emby/config:/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+    depends_on:
+      - clouddrive
+
+  # Emby18 - 18+ 媒体服务器
+  emby18:
+    image: amilys/embyserver:beta
+    container_name: emby18
+    restart: unless-stopped
+    ports:
+      - "8097:8096"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./emby18/config:/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+    depends_on:
+      - clouddrive
+
+  # Docker Copilot - Docker 管理工具
+  dockercopilot:
+    image: 0nlylty/dockercopilot:latest
+    container_name: dockerCopilot
+    restart: always
+    privileged: true
+    ports:
+      - 12712:12712
+    environment:
+      - TZ=Asia/Shanghai
+      - secretKey=TOKEN
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker_copilot/data:/data
+
+  # Movie Robot - 电影机器人
+  movie-robot:
+    image: yipengfei/movie-robot:latest
+    container_name: movie-robot
+    restart: always
+    network_mode: host
+    ports:
+      - 1329:1329
+    environment:
+      - LICENSE_KEY=TOKEN
+    volumes:
+      - ./movie-robo/data:/data
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+
+  # Emby Actor Processor - Emby 演员处理器
+  emby-actor-processor:
+    image: hbq0405/emby-actor-processor:latest
+    container_name: emby-actor-processor
+    restart: unless-stopped
+    ports:
+      - "5257:5257"
+    volumes:
+      - ./emby_actor_processor/config:/config
+      - /volume1/media/data/ctmdb:/tmdb
+    environment:
+      - APP_DATA_DIR=/config
+      - TZ=Asia/Shanghai
+      - AUTH_USERNAME=Tionmon
+      - UID=0
+      - GID=0
+      - UMASK=000
+
+  # MetaTube - 视频元数据管理
+  metatube:
+    image: ghcr.io/metatube-community/metatube-server:latest
+    container_name: metatube
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      - TOKEN=TOKEN
+    volumes:
+      - run:/var/run
+    command: -dsn "postgres://metatube:metatube@/metatube?host=/var/run/postgresql" -port 8080 -db-auto-migrate -db-prepared-stmt
+
+  # PostgreSQL - MetaTube 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: metatube-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=metatube
+      - POSTGRES_PASSWORD=metatube
+      - POSTGRES_DB=metatube
+    volumes:
+      - ./metatube/db:/var/lib/postgresql/data
+      - run:/var/run
+    command: "-c TimeZone=Asia/Shanghai -c log_timezone=Asia/Shanghai -c listen_addresses='' -c unix_socket_permissions=0777"
+
+  # qBittorrent - BT下载工具
+  qbittorrent:
+    image: linuxserver/qbittorrent
+    container_name: qbittorrent2
+    restart: always
+    network_mode: host
+    ports:
+      - '8091:8091'
+      - '16881:16881'
+      - '16881:16881/udp'
+    volumes:
+      - ./qbittorrent/config:/config
+      - "/volume1/media:/volume1/media"
+      - "/volume2/hdd/qb:/volume2/hdd/qb"
+    environment:
+      - 'PUID=0'
+      - 'PGID=0'
+      - 'TZ=Asia/Shanghai'
+      - 'WEBUI_PORT=8091'
+      - 'QBITTORRENT_WEBUI_PORT=8091'
+
+  # V2rayA - 代理工具
+  v2raya:
+    image: mzz2017/v2raya:latest
+    container_name: v2raya
+    restart: always
+    network_mode: host
+    privileged: true
+    environment:
+      - V2RAYA_CONFIG:/etc/v2raya
+      - V2RAYA_ADDRESS=0.0.0.0:2017
+      - V2RAYA_PLUGINLISTENPORT:32346
+      - V2RAYA_V2RAY_BIN=/usr/local/bin/xray
+    volumes:
+      - ./v2raya/data:/etc/v2raya
+      - /lib/modules:/lib/modules:ro
+      - /etc/resolv.conf:/etc/resolv.conf
+    labels:
+      createdBy: "Apps"
+
+  # Cloudflare Hosts Updater - Cloudflare主机更新器
+  cloudflare-hosts-updater:
+    image: neilforest/cloudflare-hosts-updater:latest
+    container_name: cloudflare-hosts-updater
+    restart: unless-stopped
+    ports:
+      - "18080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./cfhost/data:/app/data
+
+  # DDNS-GO - 动态域名解析
+  ddns-go:
+    image: jeessy/ddns-go
+    container_name: ddns-go
+    restart: unless-stopped
+    ports:
+      - "9876:9876"
+    environment:
+      - DDNS_GO_IPV4=1
+      - DDNS_GO_DDNS_LIST=example.com
+      - DDNS_GO_INTERVAL=600
+      - DDNS_GO_PROXY_MODE=1
+    volumes:
+      - ./ddns:/etc/ddns
+
+  # Uptime Kuma - 服务监控
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "23001:3001"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./uptime-kuma:/app/data
+
+volumes:
+  run:
+
+networks:
+  1panel-network:
+    external: true
