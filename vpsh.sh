@@ -133,6 +133,7 @@ show_option "16" "caddy" "Caddy服务器安装"
 show_option "17" "80443" "清理80/443端口占用"
 show_option "18" "remby" "Caddy反向代理配置"
 show_option "19" "in" "环境初始化脚本"
+show_option "20" "sb" "sing-box安装脚本"
 show_option "up" "update-vpsh" "更新VPSH脚本"
 
 draw_bottom_border
@@ -459,6 +460,10 @@ case $choice in
             echo "环境初始化完成！"
         fi
         ;;
+    20)
+        echo "执行sing-box安装脚本"
+        bash <(wget -qO- -o- https://github.com/233boy/sing-box/raw/main/install.sh)
+        ;;
 
     18)
         echo "执行Caddy反向代理配置脚本"
@@ -480,7 +485,7 @@ case $choice in
         echo
         printf "${RED}╭─ 错误信息 ─────────────────────────────────────────────────────────────────╮${RESET}\n"
         printf "${RED}│${RESET} ${RED}❌ 无效的选择: [${choice}]${RESET}%54s${RED}│${RESET}\n" ""
-        printf "${RED}│${RESET} ${YELLOW}💡 请输入有效的序号 (0-19, up) 或 'q' 退出${RESET}%32s${RED}│${RESET}\n" ""
+        printf "${RED}│${RESET} ${YELLOW}💡 请输入有效的序号 (0-20, up) 或 'q' 退出${RESET}%32s${RED}│${RESET}\n" ""
         printf "${RED}╰─────────────────────────────────────────────────────────────────────────────╯${RESET}\n"
         echo
         printf "${GRAY}按任意键返回主菜单...${RESET}"
