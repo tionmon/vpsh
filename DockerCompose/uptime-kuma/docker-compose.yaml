@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  # Uptime Kuma - 服务监控
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "23001:3001"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./uptime-kuma:/app/data

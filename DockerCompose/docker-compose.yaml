@@ -329,6 +329,9 @@ services:
       - run:/var/run
     command: -dsn "postgres://metatube:metatube@/metatube?host=/var/run/postgresql" -port 8080 -db-auto-migrate -db-prepared-stmt
 
+#volumes:
+#  run:
+
   # PostgreSQL - MetaTube 数据库
   postgres:
     image: postgres:15-alpine
@@ -420,6 +423,19 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - ./uptime-kuma:/app/data
+
+  # 115-upload - 115网盘上传
+  115-upload:                 # service 名称，可自行调整
+    image: yasser618/115-upload:beta
+    container_name: 115-123-upload
+    ports:
+      - "5200:5200"           # 宿主机:容器端口
+    volumes:
+      - ./115-upload/to/data:/data
+      - ./115-upload/to/123:/123
+      - ./115-upload/to/115:/115
+      - "./115-upload/to/cd2监控:/cd2监控"   # 含非 ASCII 字符的路径建议加引号
+    restart: unless-stopped   # 可选，但推荐添加
 
 volumes:
   run:

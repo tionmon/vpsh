@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  # Telegram Assistant - Telegram 助手
+  telegram-assistant:
+    image: shenxianmq/telegram_assistant:latest
+    container_name: telegram_assistant
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config:/app/config
+      - ./downloads/telegram:/app/downloads/telegram
+      - ./downloads/youtube:/app/downloads/youtube
+      - ./downloads/douyin:/app/downloads/douyin
+      - ./downloads/bilibili:/app/downloads/bilibili
+      - ./downloads/temp:/app/temp

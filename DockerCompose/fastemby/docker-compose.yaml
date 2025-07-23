@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  # FastEmby - 快速 Emby 服务
+  fastemby:
+    image: shenxianmq/fastemby:latest
+    container_name: FastEmby
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Asia/Shanghai
+      - CHECKIN=0
+      - LICENSE_KEY=TOKEN
+    volumes:
+      - ./config:/app/config
+      - ./log:/app/log

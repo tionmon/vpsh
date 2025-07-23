@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  # Emby18 - 18+ 媒体服务器
+  emby18:
+    image: amilys/embyserver:beta
+    container_name: emby18
+    restart: unless-stopped
+    ports:
+      - "8097:8096"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./config:/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd

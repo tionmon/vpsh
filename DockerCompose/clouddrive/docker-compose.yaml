@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  # CloudDrive - 云盘挂载服务
+  clouddrive:
+    image: cloudnas/clouddrive2:0.8.14
+    container_name: clouddrive
+    restart: always
+    network_mode: host
+    pid: host
+    privileged: true
+    ports:
+      - "19798:19798"
+    environment:
+      - CLOUDDRIVE_HOME=/Config
+    volumes:
+      - ./config:/Config
+      - /volume1/CloudNAS:/volume1/CloudNAS:shared
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+    devices:
+      - /dev/fuse:/dev/fuse

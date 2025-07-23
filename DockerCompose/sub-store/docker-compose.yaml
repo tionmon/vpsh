@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # Sub Store - 订阅转换服务
+  sub-store:
+    image: xream/sub-store:latest
+    container_name: sub-store
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "13001:3001"
+    environment:
+      SUB_STORE_PUSH_SERVICE: "https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]?group=SubStore&autoCopy=1&isArchive=1&sound=shake&level=timeSensitive&icon=https%3A%2F%2Fraw.githubusercontent.com%2F58xinian%2Ficon%2Fmaster%2FSub-Store1.png"
+      SUB_STORE_CRON: "55 23 * * *"
+      SUB_STORE_FRONTEND_BACKEND_PATH: "/TOKEN"
+    volumes:
+      - "./data:/opt/app/data"
+    labels:
+      createdBy: "Apps"
+
+networks:
+  1panel-network:
+    external: true

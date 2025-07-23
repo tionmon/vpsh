@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  # Symedia - 媒体管理服务
+  symedia:
+    image: shenxianmq/symedia:latest
+    container_name: symedia
+    restart: always
+    network_mode: host
+    ports:
+      - "8095:8095"
+    volumes:
+      - ./config:/app/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - LICENSE_KEY=TOKEN
+    extra_hosts:
+      - "webapi.115.com:47.113.23.100"

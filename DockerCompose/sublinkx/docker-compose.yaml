@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  # SubLinkX - 订阅链接转换
+  sublinkx:
+    image: jaaksi/sublinkx
+    container_name: sublinkx
+    restart: always
+    network_mode: bridge
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./db:/app/db
+      - ./template:/app/template
+      - ./logs:/app/logs

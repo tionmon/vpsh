@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  # Movie Pilot - 电影自动化管理
+  moviepilot:
+    image: jxxghp/moviepilot-v2:latest
+    container_name: moviepilot-v2
+    hostname: moviepilot-v2
+    restart: always
+    stdin_open: true
+    tty: true
+    network_mode: host
+    volumes:
+      - './media:/media'
+      - './config:/config'
+      - './core:/moviepilot/.cache/ms-playwright'
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    environment:
+      - 'NGINX_PORT=3000'
+      - 'PORT=33001'
+      - 'PUID=0'
+      - 'PGID=0'
+      - 'UMASK=000'
+      - 'TZ=Asia/Shanghai'
+      - 'SUPERUSER=Tionmon'

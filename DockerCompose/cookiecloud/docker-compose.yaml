@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  # Cookie Cloud - Cookie 同步服务
+  cookiecloud:
+    image: easychen/cookiecloud:latest
+    container_name: cookiecloud
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "8088:8088"
+    volumes:
+      - "./data:/data/api/data"
+    environment:
+      - API_ROOT=./TOKEN
+    labels:
+      createdBy: "Apps"
+
+networks:
+  1panel-network:
+    external: true

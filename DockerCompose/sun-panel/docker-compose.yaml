@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  # Sun Panel - 导航面板
+  sun-panel:
+    image: hslr/sun-panel:1.6.0
+    container_name: sun-panel
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./conf:/app/conf
+      - ./uploads:/app/uploads
+      - ./database:/app/database
+    labels:
+      createdBy: "Apps"
+
+networks:
+  1panel-network:
+    external: true

@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  # Emby Actor Processor - Emby 演员处理器
+  emby-actor-processor:
+    image: hbq0405/emby-actor-processor:latest
+    container_name: emby-actor-processor
+    restart: unless-stopped
+    ports:
+      - "5257:5257"
+    volumes:
+      - ./config:/config
+      - /volume1/media/data/ctmdb:/tmdb
+    environment:
+      - APP_DATA_DIR=/config
+      - TZ=Asia/Shanghai
+      - AUTH_USERNAME=Tionmon
+      - UID=0
+      - GID=0
+      - UMASK=000

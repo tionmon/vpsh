@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  # MDC NG - 媒体数据收集
+  mdcng:
+    image: mdcng/mdc:latest
+    container_name: mdcng
+    restart: unless-stopped
+    ports:
+      - 9208:9208
+    volumes:
+      - ./data:/config
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
+    environment:
+      - PUID=0
+      - PGID=0

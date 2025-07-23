@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  # Movie Robot - 电影机器人
+  movie-robot:
+    image: yipengfei/movie-robot:latest
+    container_name: movie-robot
+    restart: always
+    network_mode: host
+    ports:
+      - 1329:1329
+    environment:
+      - LICENSE_KEY=TOKEN
+    volumes:
+      - ./data:/data
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd

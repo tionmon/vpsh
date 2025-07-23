@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  # qBittorrent - BT下载工具
+  qbittorrent:
+    image: linuxserver/qbittorrent
+    container_name: qbittorrent2
+    restart: always
+    network_mode: host
+    ports:
+      - '8091:8091'
+      - '16881:16881'
+      - '16881:16881/udp'
+    volumes:
+      - ./config:/config
+      - "/volume1/media:/volume1/media"
+      - "/volume2/hdd/qb:/volume2/hdd/qb"
+    environment:
+      - 'PUID=0'
+      - 'PGID=0'
+      - 'TZ=Asia/Shanghai'
+      - 'WEBUI_PORT=8091'
+      - 'QBITTORRENT_WEBUI_PORT=8091'

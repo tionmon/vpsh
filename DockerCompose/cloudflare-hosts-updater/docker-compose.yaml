@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  # Cloudflare Hosts Updater - Cloudflare主机更新器
+  cloudflare-hosts-updater:
+    image: neilforest/cloudflare-hosts-updater:latest
+    container_name: cloudflare-hosts-updater
+    restart: unless-stopped
+    ports:
+      - "18080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data

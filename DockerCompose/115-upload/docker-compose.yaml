@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  # 115-upload - 115网盘上传
+  115-upload:                 # service 名称，可自行调整
+    image: yasser618/115-upload:beta
+    container_name: 115-123-upload
+    ports:
+      - "5200:5200"           # 宿主机:容器端口
+    volumes:
+      - ./to/data:/data
+      - ./to/123:/123
+      - ./to/115:/115
+      - "./to/cd2监控:/cd2监控"   # 含非 ASCII 字符的路径建议加引号
+    restart: unless-stopped   # 可选，但推荐添加

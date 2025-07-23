@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  # HD Icons - 图标库服务
+  hd-icons:
+    image: xushier/hd-icons:latest
+    container_name: HD-Icons
+    ports:
+      - 50560:50560
+    volumes:
+      - ./icons:/app/icons
+    environment:
+      - TITLE=Icons

@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  # OpenList - 文件列表服务
+  openlist:
+    image: openlistteam/openlist:beta-aio
+    container_name: openlist
+    restart: always
+    ports:
+      - 5244:5244
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./alist:/opt/alist/data
+      - /volume1/CloudNAS:/volume1/CloudNAS:rslave
+      - /volume1/media:/media
+      - /volume2/hdd:/hdd
