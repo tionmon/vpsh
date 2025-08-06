@@ -37,7 +37,7 @@ fi
 curl -fsSL https://gh-proxy.com/raw.githubusercontent.com/docker/docker-install/master/install.sh | bash
 
 # 创建并安装 v2raya
-mkdir -p /home/docker/v2raya && cd /home/docker/v2raya && sudo curl -L -o docker-compose.yaml https://gh-proxy.com/https://raw.githubusercontent.com/tionmon/vpsh/refs/heads/main/file/v2raya.yaml
+mkdir -p /home/docker/v2raya && cd /home/docker/v2raya && sudo curl -L -o docker-compose.yaml https://gh-proxy.com/raw.githubusercontent.com/tionmon/vpsh/refs/heads/main/file/v2raya.yaml
 
 # 启动 docker-compose
 docker-compose up -d
