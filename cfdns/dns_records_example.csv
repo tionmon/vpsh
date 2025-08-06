@@ -1,0 +1,53 @@
+# DNS 记录批量添加示例文件
+# 格式: 记录名称,记录类型,记录内容,TTL(可选)
+# 注释行以 # 开头
+# TTL 默认为 1 (自动)
+
+# A 记录示例 - 指向 IPv4 地址
+www,A,192.168.1.100,3600
+api,A,192.168.1.101,3600
+ftp,A,192.168.1.102,3600
+mail,A,192.168.1.103,3600
+
+# AAAA 记录示例 - 指向 IPv6 地址
+www,AAAA,2001:db8::1,3600
+api,AAAA,2001:db8::2,3600
+
+# CNAME 记录示例 - 别名记录
+blog,CNAME,www.example.com,3600
+shop,CNAME,www.example.com,3600
+cdn,CNAME,cdn.example.com,3600
+
+# MX 记录示例 - 邮件交换记录
+@,MX,10 mail.example.com,3600
+@,MX,20 mail2.example.com,3600
+
+# TXT 记录示例 - 文本记录
+@,TXT,"v=spf1 include:_spf.example.com ~all",3600
+_dmarc,TXT,"v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com",3600
+_dkim,TXT,"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC...",3600
+google-site-verification,TXT,"google-site-verification=abcdef123456",3600
+
+# SRV 记录示例 - 服务记录
+_sip._tcp,SRV,10 5 5060 sip.example.com,3600
+_xmpp-server._tcp,SRV,5 0 5269 xmpp.example.com,3600
+
+# NS 记录示例 - 名称服务器记录
+subdomain,NS,ns1.example.com,3600
+subdomain,NS,ns2.example.com,3600
+
+# CAA 记录示例 - 证书颁发机构授权
+@,CAA,"0 issue \"letsencrypt.org\"",3600
+@,CAA,"0 issuewild \"letsencrypt.org\"",3600
+
+# 常用子域名示例
+test,A,192.168.1.200,300
+dev,A,192.168.1.201,300
+staging,A,192.168.1.202,300
+app,A,192.168.1.203,3600
+admin,A,192.168.1.204,3600
+static,A,192.168.1.205,3600
+images,A,192.168.1.206,3600
+video,A,192.168.1.207,3600
+download,A,192.168.1.208,3600
+upload,A,192.168.1.209,3600

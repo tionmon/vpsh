@@ -1,0 +1,73 @@
+# DNS 记录批量删除示例文件
+# 支持两种删除方式：
+# 1. 按记录 ID 删除：record_id
+# 2. 按名称和类型删除：record_name,record_type
+# 注释行以 # 开头
+
+# ============= 按记录 ID 删除 =============
+# 使用完整的记录 ID 或前8位即可
+# 可以通过 ./cfdns.sh -l -z yourdomain.com 获取记录 ID
+# abcd1234
+# efgh5678
+# ijkl9012
+
+# ============= 按名称和类型删除 =============
+# 格式: 记录名称,记录类型
+# 如果不指定类型，将删除该名称的所有记录
+
+# 删除测试记录
+test,A
+dev,A
+staging,A
+
+# 删除临时 CNAME 记录
+temp,CNAME
+old,CNAME
+
+# 删除特定的 TXT 记录
+_verification,TXT
+google-site-verification,TXT
+
+# 删除所有类型的记录（不指定类型）
+# unused-subdomain,
+
+# ============= 常见删除场景 =============
+
+# 清理开发环境记录
+# dev-api,A
+# dev-app,A
+# dev-db,A
+
+# 清理过期的验证记录
+# _acme-challenge,TXT
+# _dmarc-test,TXT
+
+# 清理旧的邮件记录
+# old-mail,A
+# old-smtp,A
+
+# 清理 CDN 相关记录
+# old-cdn,CNAME
+# old-static,CNAME
+
+# ============= 批量清理子域名 =============
+# 删除一系列相关的子域名
+# app1,A
+# app2,A
+# app3,A
+# api1,A
+# api2,A
+# api3,A
+
+# ============= 使用说明 =============
+# 1. 复制此文件并重命名
+# 2. 取消注释需要删除的记录行
+# 3. 运行删除命令：
+#    Linux/Unix: ./cfdns.sh -b delete your_delete_file.csv -z yourdomain.com
+#    Windows: .\cfdns.ps1 -Batch -File your_delete_file.csv -Zone yourdomain.com
+#
+# 注意事项：
+# - 删除操作不可逆，请谨慎操作
+# - 建议先备份重要的 DNS 记录
+# - 可以先用 -l 选项列出所有记录进行确认
+# - 按名称删除时，如果存在多条同名不同类型的记录，会全部删除

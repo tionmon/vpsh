@@ -1,0 +1,92 @@
+# Cloudflare DNS 批量配置模板
+# 格式: 记录名称,记录类型,记录内容,TTL(可选)
+# 使用说明:
+# 1. 复制此文件并重命名
+# 2. 修改下面的记录为您的实际配置
+# 3. 运行: ./cfdns.sh -b add your_file.csv -z yourdomain.com
+
+# ============= 基础网站记录 =============
+# 主域名和 www 子域名
+@,A,YOUR_SERVER_IP,3600
+www,A,YOUR_SERVER_IP,3600
+
+# ============= 常用子域名 =============
+# API 服务
+api,A,YOUR_API_SERVER_IP,3600
+
+# 邮件服务
+mail,A,YOUR_MAIL_SERVER_IP,3600
+
+# FTP 服务
+ftp,A,YOUR_FTP_SERVER_IP,3600
+
+# 文件/静态资源
+static,A,YOUR_CDN_IP,3600
+files,A,YOUR_FILE_SERVER_IP,3600
+
+# ============= 开发环境 =============
+# 开发环境 (较短 TTL)
+dev,A,YOUR_DEV_SERVER_IP,300
+test,A,YOUR_TEST_SERVER_IP,300
+staging,A,YOUR_STAGING_SERVER_IP,300
+
+# ============= CNAME 记录 =============
+# 博客指向主站
+blog,CNAME,www.yourdomain.com,3600
+
+# CDN 别名
+cdn,CNAME,your-cdn-domain.com,3600
+images,CNAME,your-cdn-domain.com,3600
+
+# ============= 邮件相关记录 =============
+# MX 记录 (邮件交换)
+@,MX,10 mail.yourdomain.com,3600
+@,MX,20 mail2.yourdomain.com,3600
+
+# SPF 记录 (防止邮件伪造)
+@,TXT,"v=spf1 include:_spf.yourdomain.com ~all",3600
+
+# DMARC 记录 (邮件认证策略)
+_dmarc,TXT,"v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com",3600
+
+# DKIM 记录 (邮件签名)
+# 注意: 需要替换为您的实际 DKIM 公钥
+default._domainkey,TXT,"v=DKIM1; k=rsa; p=YOUR_DKIM_PUBLIC_KEY",3600
+
+# ============= 验证记录 =============
+# Google 站点验证
+google-site-verification,TXT,"google-site-verification=YOUR_VERIFICATION_CODE",3600
+
+# 百度站点验证
+baidu-site-verification,TXT,"baidu-site-verification=YOUR_VERIFICATION_CODE",3600
+
+# ============= 服务发现记录 =============
+# SIP 服务
+_sip._tcp,SRV,10 5 5060 sip.yourdomain.com,3600
+
+# XMPP 服务
+_xmpp-server._tcp,SRV,5 0 5269 xmpp.yourdomain.com,3600
+_xmpp-client._tcp,SRV,5 0 5222 xmpp.yourdomain.com,3600
+
+# ============= 安全记录 =============
+# CAA 记录 (证书颁发机构授权)
+@,CAA,"0 issue \"letsencrypt.org\"",3600
+@,CAA,"0 issuewild \"letsencrypt.org\"",3600
+@,CAA,"0 iodef \"mailto:security@yourdomain.com\"",3600
+
+# ============= IPv6 记录 =============
+# 如果您有 IPv6 地址，可以添加 AAAA 记录
+# @,AAAA,YOUR_IPV6_ADDRESS,3600
+# www,AAAA,YOUR_IPV6_ADDRESS,3600
+
+# ============= 子域名委托 =============
+# 如果需要将子域名委托给其他 DNS 服务器
+# subdomain,NS,ns1.other-provider.com,3600
+# subdomain,NS,ns2.other-provider.com,3600
+
+# ============= 特殊用途记录 =============
+# 用于 acme-challenge (Let's Encrypt 证书验证)
+# _acme-challenge,TXT,"challenge-string",300
+
+# 用于域名验证
+# _verification,TXT,"verification-string",300

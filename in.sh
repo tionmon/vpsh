@@ -36,18 +36,8 @@ fi
 # 安装docker
 curl -fsSL https://gh-proxy.com/raw.githubusercontent.com/docker/docker-install/master/install.sh | bash
 
-# 下载 docker-compose-linux-x86_64 到 /usr/local/bin/ 命名为 docker-compose
-curl -L -o /usr/local/bin/docker-compose https://gh-proxy.com/https://github.com/docker/compose/releases/download/v2.38.2/docker-compose-linux-x86_64
-
-
-# 给文件添加可执行权限
-chmod +x /usr/local/bin/docker-compose
-
-# 输出结果
-echo "docker-compose 已成功移动并赋予可执行权限"
-
 # 创建并安装 v2raya
-mkdir -p /home/docker/v2raya && cd /home/docker/v2raya && sudo curl -L -o docker-compose.yaml https://gh-proxy.com/https://raw.githubusercontent.com/tionmon/vpsh/refs/heads/main/v2raya.yaml
+mkdir -p /home/docker/v2raya && cd /home/docker/v2raya && sudo curl -L -o docker-compose.yaml https://gh-proxy.com/https://raw.githubusercontent.com/tionmon/vpsh/refs/heads/main/file/v2raya.yaml
 
 # 启动 docker-compose
 docker-compose up -d
