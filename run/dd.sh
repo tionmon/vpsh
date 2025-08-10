@@ -43,49 +43,50 @@ show_banner() {
 show_menu() {
     echo -e "${YELLOW}请选择要安装的操作系统:${NC}"
     echo ""
-    echo "1)  Debian 12 (推荐)"
-    echo "2)  Debian 11"
-    echo "3)  Debian 10"
-    echo "4)  Debian 9"
-    echo "5)  Ubuntu 24.04 LTS"
-    echo "6)  Ubuntu 22.04 LTS"
-    echo "7)  Ubuntu 20.04 LTS"
-    echo "8)  Ubuntu 18.04 LTS"
-    echo "9)  Ubuntu 16.04 LTS"
-    echo "10) CentOS 10"
-    echo "11) CentOS 9"
-    echo "12) Rocky Linux 10"
-    echo "13) Rocky Linux 9"
-    echo "14) Rocky Linux 8"
-    echo "15) AlmaLinux 10"
-    echo "16) AlmaLinux 9"
-    echo "17) AlmaLinux 8"
-    echo "18) Oracle Linux 9"
-    echo "19) Oracle Linux 8"
-    echo "20) Fedora 42"
-    echo "21) Fedora 41"
-    echo "22) OpenSUSE 15.6"
-    echo "23) OpenSUSE Tumbleweed"
-    echo "24) Alpine 3.22"
-    echo "25) Alpine 3.21"
-    echo "26) Alpine 3.20"
-    echo "27) Alpine 3.19"
-    echo "28) Anolis 23"
-    echo "29) Anolis 8"
-    echo "30) Anolis 7"
-    echo "31) OpenCloudOS 23"
-    echo "32) OpenCloudOS 9"
-    echo "33) OpenCloudOS 8"
-    echo "34) OpenEuler 25.03"
-    echo "35) OpenEuler 24.03"
-    echo "36) OpenEuler 22.03"
-    echo "37) OpenEuler 20.03"
-    echo "38) NixOS 25.05"
-    echo "39) Kali Linux"
-    echo "40) Arch Linux"
-    echo "41) Gentoo"
-    echo "42) AOSC OS"
-    echo "43) Fedora CoreOS"
+    echo "1)  Debian 13"
+    echo "2)  Debian 12 (推荐)"
+    echo "3)  Debian 11"
+    echo "4)  Debian 10"
+    echo "5)  Debian 9"
+    echo "6)  Ubuntu 24.04 LTS"
+    echo "7)  Ubuntu 22.04 LTS"
+    echo "8)  Ubuntu 20.04 LTS"
+    echo "9)  Ubuntu 18.04 LTS"
+    echo "10) Ubuntu 16.04 LTS"
+    echo "11) CentOS 10"
+    echo "12) CentOS 9"
+    echo "13) Rocky Linux 10"
+    echo "14) Rocky Linux 9"
+    echo "15) Rocky Linux 8"
+    echo "16) AlmaLinux 10"
+    echo "17) AlmaLinux 9"
+    echo "18) AlmaLinux 8"
+    echo "19) Oracle Linux 9"
+    echo "20) Oracle Linux 8"
+    echo "21) Fedora 42"
+    echo "22) Fedora 41"
+    echo "23) OpenSUSE 15.6"
+    echo "24) OpenSUSE Tumbleweed"
+    echo "25) Alpine 3.22"
+    echo "26) Alpine 3.21"
+    echo "27) Alpine 3.20"
+    echo "28) Alpine 3.19"
+    echo "29) Anolis 23"
+    echo "30) Anolis 8"
+    echo "31) Anolis 7"
+    echo "32) OpenCloudOS 23"
+    echo "33) OpenCloudOS 9"
+    echo "34) OpenCloudOS 8"
+    echo "35) OpenEuler 25.03"
+    echo "36) OpenEuler 24.03"
+    echo "37) OpenEuler 22.03"
+    echo "38) OpenEuler 20.03"
+    echo "39) NixOS 25.05"
+    echo "40) Kali Linux"
+    echo "41) Arch Linux"
+    echo "42) Gentoo"
+    echo "43) AOSC OS"
+    echo "44) Fedora CoreOS"
     echo ""
     echo "0)  退出脚本"
     echo ""
@@ -94,49 +95,50 @@ show_menu() {
 # 获取系统参数
 get_system_params() {
     case $1 in
-        1) echo "debian 12" ;;
-        2) echo "debian 11" ;;
-        3) echo "debian 10" ;;
-        4) echo "debian 9" ;;
-        5) echo "ubuntu 24.04" ;;
-        6) echo "ubuntu 22.04" ;;
-        7) echo "ubuntu 20.04" ;;
-        8) echo "ubuntu 18.04" ;;
-        9) echo "ubuntu 16.04" ;;
-        10) echo "centos 10" ;;
-        11) echo "centos 9" ;;
-        12) echo "rocky 10" ;;
-        13) echo "rocky 9" ;;
-        14) echo "rocky 8" ;;
-        15) echo "almalinux 10" ;;
-        16) echo "almalinux 9" ;;
-        17) echo "almalinux 8" ;;
-        18) echo "oracle 9" ;;
-        19) echo "oracle 8" ;;
-        20) echo "fedora 42" ;;
-        21) echo "fedora 41" ;;
-        22) echo "opensuse 15.6" ;;
-        23) echo "opensuse tumbleweed" ;;
-        24) echo "alpine 3.22" ;;
-        25) echo "alpine 3.21" ;;
-        26) echo "alpine 3.20" ;;
-        27) echo "alpine 3.19" ;;
-        28) echo "anolis 23" ;;
-        29) echo "anolis 8" ;;
-        30) echo "anolis 7" ;;
-        31) echo "opencloudos 23" ;;
-        32) echo "opencloudos 9" ;;
-        33) echo "opencloudos 8" ;;
-        34) echo "openeuler 25.03" ;;
-        35) echo "openeuler 24.03" ;;
-        36) echo "openeuler 22.03" ;;
-        37) echo "openeuler 20.03" ;;
-        38) echo "nixos 25.05" ;;
-        39) echo "kali" ;;
-        40) echo "arch" ;;
-        41) echo "gentoo" ;;
-        42) echo "aosc" ;;
-        43) echo "fnos" ;;
+        1) echo "debian 13" ;;
+        2) echo "debian 12" ;;
+        3) echo "debian 11" ;;
+        4) echo "debian 10" ;;
+        5) echo "debian 9" ;;
+        6) echo "ubuntu 24.04" ;;
+        7) echo "ubuntu 22.04" ;;
+        8) echo "ubuntu 20.04" ;;
+        9) echo "ubuntu 18.04" ;;
+        10) echo "ubuntu 16.04" ;;
+        11) echo "centos 10" ;;
+        12) echo "centos 9" ;;
+        13) echo "rocky 10" ;;
+        14) echo "rocky 9" ;;
+        15) echo "rocky 8" ;;
+        16) echo "almalinux 10" ;;
+        17) echo "almalinux 9" ;;
+        18) echo "almalinux 8" ;;
+        19) echo "oracle 9" ;;
+        20) echo "oracle 8" ;;
+        21) echo "fedora 42" ;;
+        22) echo "fedora 41" ;;
+        23) echo "opensuse 15.6" ;;
+        24) echo "opensuse tumbleweed" ;;
+        25) echo "alpine 3.22" ;;
+        26) echo "alpine 3.21" ;;
+        27) echo "alpine 3.20" ;;
+        28) echo "alpine 3.19" ;;
+        29) echo "anolis 23" ;;
+        30) echo "anolis 8" ;;
+        31) echo "anolis 7" ;;
+        32) echo "opencloudos 23" ;;
+        33) echo "opencloudos 9" ;;
+        34) echo "opencloudos 8" ;;
+        35) echo "openeuler 25.03" ;;
+        36) echo "openeuler 24.03" ;;
+        37) echo "openeuler 22.03" ;;
+        38) echo "openeuler 20.03" ;;
+        39) echo "nixos 25.05" ;;
+        40) echo "kali" ;;
+        41) echo "arch" ;;
+        42) echo "gentoo" ;;
+        43) echo "aosc" ;;
+        44) echo "fnos" ;;
         *) echo "" ;;
     esac
 }
