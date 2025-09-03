@@ -40,7 +40,7 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - /volume1/music:/app/media:rw
+      - ./music-tag-web/music:/app/media:rw
       - ./music-tag-web/config:/app/data
 
   # Sync Clipboard - 剪贴板同步服务

@@ -1,0 +1,31 @@
+{
+  "name": "cf-dns-manager-proxy",
+  "version": "1.0.0",
+  "description": "Cloudflare DNS 管理工具的 CORS 代理服务器",
+  "main": "cf-dns-proxy-server.js",
+  "scripts": {
+    "start": "node cf-dns-proxy-server.js",
+    "dev": "nodemon cf-dns-proxy-server.js",
+    "install-deps": "npm install express http-proxy-middleware cors"
+  },
+  "keywords": [
+    "cloudflare",
+    "dns",
+    "proxy",
+    "cors",
+    "管理工具"
+  ],
+  "author": "CF DNS Manager",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

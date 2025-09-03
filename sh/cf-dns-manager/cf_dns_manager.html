@@ -1,0 +1,2501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DNS 解析管理工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .api-config {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            color: white;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .dns-records {
+            background: #f8f9fa;
+            border-radius: 0 0 8px 8px;
+            padding: 0;
+        }
+
+        .dns-records.no-header {
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .record-item {
+            background: white;
+            border-radius: 0;
+            margin-bottom: 1px;
+            border-left: 4px solid #667eea;
+            box-shadow: none;
+            transition: all 0.2s ease;
+            overflow: hidden;
+        }
+
+        .record-item:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+
+        .record-item:last-child {
+            border-radius: 0 0 8px 8px;
+            margin-bottom: 0;
+        }
+
+        .record-item:only-child {
+            border-radius: 8px;
+        }
+
+        .record-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .record-item.expanded {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+
+        .record-summary {
+            padding: 12px 16px;
+            display: grid;
+            grid-template-columns: 24px 80px 60px 1fr 1fr 80px 80px 120px;
+            gap: 12px;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .record-summary:hover {
+            background: #f8f9fa;
+        }
+
+        .record-details {
+            padding: 16px;
+            border-top: 1px solid #f0f0f0;
+            background: #fafbfc;
+            display: none;
+        }
+
+        .record-details.expanded {
+            display: block;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+
+
+        .record-item.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .record-name-compact {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .record-value-compact {
+            color: #666;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .record-ttl-compact {
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .record-status-compact {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .expand-icon {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.2s ease;
+            color: #666;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+
+        .record-actions-compact {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .status-dot.proxied {
+            background: #ff9500;
+        }
+
+        .record-actions-compact {
+            display: flex;
+            gap: 4px;
+        }
+
+        .btn-compact {
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-compact.btn-edit {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-compact.btn-copy {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-compact.btn-delete {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-compact:hover {
+            transform: scale(1.05);
+        }
+
+        .record-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .detail-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: #333;
+            word-break: break-all;
+        }
+
+        .detail-value.monospace {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #f8f9fa;
+            padding: 6px 8px;
+            border-radius: 4px;
+        }
+
+        /* 增大选择框 */
+        .record-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            transform: scale(1.2);
+            margin: 0;
+        }
+
+        .record-checkbox:hover {
+            transform: scale(1.3);
+        }
+
+        .checkbox-container:hover {
+            background-color: rgba(102, 126, 234, 0.1);
+        }
+
+        .record-type {
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            display: inline-block;
+        }
+
+        .record-type.type-A {
+            background: #28a745;
+        }
+
+        .record-type.type-AAAA {
+            background: #17a2b8;
+        }
+
+        .record-type.type-CNAME {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .record-type.type-MX {
+            background: #fd7e14;
+        }
+
+        .record-type.type-TXT {
+            background: #6f42c1;
+        }
+
+        .record-type.type-SRV {
+            background: #e83e8c;
+        }
+
+        .record-type.type-NS {
+            background: #6c757d;
+        }
+
+        .record-type.type-PTR {
+            background: #dc3545;
+        }
+
+        .record-type.default {
+            background: #667eea;
+        }
+
+        .record-name {
+            font-weight: 700;
+            color: #333;
+            font-size: 16px;
+            margin-bottom: 2px;
+        }
+
+        .record-name-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .record-value {
+            color: #555;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            background: #f8f9fa;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            word-break: break-all;
+            margin-top: 4px;
+        }
+
+        .record-value-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .record-ttl {
+            color: #888;
+            font-size: 12px;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .record-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .status-indicator.proxied {
+            background: #ff9500;
+        }
+
+        .cdn-toggle {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .cdn-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #ff9500;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .record-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .record-actions .btn {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            font-size: 1.5rem;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        .batch-textarea {
+            min-height: 200px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .zone-selector {
+            margin-bottom: 20px;
+        }
+
+        .zone-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .zone-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .zone-item.selected {
+            background-color: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .api-config {
+                grid-template-columns: 1fr;
+            }
+            
+            .toolbar {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+
+            .record-summary {
+                grid-template-columns: 20px 60px 45px 1fr 80px;
+                gap: 8px;
+                padding: 10px 12px;
+            }
+
+            .record-value-compact {
+                max-width: 150px;
+                font-size: 12px;
+            }
+
+            .record-ttl-compact,
+            .record-status-compact {
+                display: none;
+            }
+
+            .record-actions-compact {
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            .record-actions-compact .btn-compact {
+                min-width: 24px;
+            }
+
+            .btn-compact {
+                padding: 6px 8px;
+                font-size: 10px;
+            }
+
+            .record-details-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .record-name-compact {
+                min-width: auto;
+                font-size: 13px;
+            }
+
+            .record-type {
+                padding: 2px 6px;
+                font-size: 9px;
+                min-width: 35px;
+            }
+
+            .record-checkbox {
+                transform: scale(1.4);
+            }
+
+            .checkbox-container {
+                padding: 6px;
+            }
+
+            /* 搜索栏移动端优化 */
+            .search-filter-container {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .search-filter-container > div {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+
+        .search-filter-container {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 15px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 Cloudflare DNS 解析管理工具</h1>
+            <p>专业的 DNS 记录批量管理和配置迁移工具</p>
+        </div>
+
+        <!-- CORS 错误提示卡片 -->
+        <div class="card" id="corsWarning" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; display: none;">
+            <h2>⚠️ CORS 跨域访问限制</h2>
+            <p>由于浏览器安全策略，无法直接访问 Cloudflare API。请选择以下解决方案之一：</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin: 20px 0;">
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h3>🔧 方案一：禁用浏览器 CORS 检查</h3>
+                    <p style="font-size: 14px; margin: 10px 0;">启动 Chrome 时添加参数（仅用于开发测试）：</p>
+                    <code style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; display: block; font-size: 12px;">
+                        chrome.exe --disable-web-security --user-data-dir="C:\temp\chrome_dev"
+                    </code>
+                    <button class="btn" style="background: rgba(255,255,255,0.2); margin-top: 10px;" onclick="copyToClipboard('chrome.exe --disable-web-security --user-data-dir=&quot;C:\\temp\\chrome_dev&quot;')">复制命令</button>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h3>🌐 方案二：使用浏览器扩展</h3>
+                    <p style="font-size: 14px; margin: 10px 0;">安装 CORS 解除扩展：</p>
+                    <ul style="font-size: 14px; margin: 10px 0;">
+                        <li><a href="https://chrome.google.com/webstore/detail/cors-unblock/lfhmikememgdcahcdlaciloancbhjino" target="_blank" style="color: #fff; text-decoration: underline;">CORS Unblock</a></li>
+                        <li><a href="https://chrome.google.com/webstore/detail/moesif-origin-cors-change/digfbfaphojjndkpccljibejjbppifbc" target="_blank" style="color: #fff; text-decoration: underline;">Moesif CORS</a></li>
+                    </ul>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h3>🖥️ 方案三：本地代理服务器</h3>
+                    <p style="font-size: 14px; margin: 10px 0;">启动内置代理服务器：</p>
+                    <button class="btn" style="background: rgba(255,255,255,0.2);" onclick="startProxyServer()">启动代理服务器</button>
+                    <div id="proxyServerStatus" style="margin-top: 10px; font-size: 12px;"></div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" style="background: rgba(255,255,255,0.2);" onclick="hideCorsWarning()">我已解决 CORS 问题</button>
+                <button class="btn" style="background: rgba(255,255,255,0.2);" onclick="testCorsFixed()">重新测试连接</button>
+            </div>
+        </div>
+
+        <!-- API 配置卡片 -->
+        <div class="card">
+            <h2>🔑 API 配置</h2>
+            <div class="api-config">
+                <div class="form-group">
+                    <label for="apiToken">Cloudflare API Token</label>
+                    <input type="password" id="apiToken" placeholder="输入您的 Cloudflare API Token">
+                    <small style="color: #666; margin-top: 5px;">
+                        需要 Zone:Read 和 DNS:Edit 权限
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="email">Cloudflare 账户邮箱</label>
+                    <input type="email" id="email" placeholder="输入您的 Cloudflare 账户邮箱">
+                </div>
+            </div>
+            
+            <!-- 代理模式设置 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #555;">🔧 连接模式</h4>
+                <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="radio" name="connectionMode" value="direct" id="directMode" onchange="switchConnectionMode()" checked>
+                        <span>直接连接 (可能遇到 CORS 问题)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="radio" name="connectionMode" value="proxy" id="proxyMode" onchange="switchConnectionMode()">
+                        <span>代理模式 (推荐)</span>
+                    </label>
+                    <input type="text" id="proxyUrl" placeholder="代理服务器地址" value="http://localhost:3001/api" 
+                           style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; width: 200px; display: none;"
+                           onchange="localStorage.setItem('cf_dns_proxy_url', this.value)">
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="loadZones()">
+                    <span class="loading-text">连接并加载域名</span>
+                </button>
+                <button class="btn btn-info" onclick="showProxyModal()">🌐 代理设置</button>
+                <button class="btn btn-warning" onclick="testConnection()">🔗 测试连接</button>
+                <button class="btn btn-success" onclick="testStatusDisplay()" style="font-size: 12px;">🧪 测试状态显示</button>
+            </div>
+        </div>
+
+        <!-- 域名选择卡片 -->
+        <div class="card" id="zoneCard" style="display: none;">
+            <h2>🏷️ 域名选择</h2>
+            <div class="zone-selector" id="zoneSelector">
+                <!-- 域名列表将在这里动态加载 -->
+            </div>
+            <div class="stats-grid" id="statsGrid">
+                <!-- 统计信息将在这里显示 -->
+            </div>
+        </div>
+
+        <!-- DNS 记录管理卡片 -->
+        <div class="card" id="recordsCard" style="display: none;">
+            <h2>📋 DNS 记录管理</h2>
+            
+            <!-- 搜索和筛选栏 -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div class="search-filter-container">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="searchRecords" placeholder="🔍 搜索记录名称或值..." 
+                               style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;"
+                               oninput="filterRecords()">
+                        <select id="typeFilter" onchange="filterRecords()" 
+                                style="padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <option value="">所有类型</option>
+                            <option value="A">A 记录</option>
+                            <option value="AAAA">AAAA 记录</option>
+                            <option value="CNAME">CNAME 记录</option>
+                            <option value="MX">MX 记录</option>
+                            <option value="TXT">TXT 记录</option>
+                            <option value="SRV">SRV 记录</option>
+                            <option value="NS">NS 记录</option>
+                            <option value="PTR">PTR 记录</option>
+                        </select>
+                    </div>
+                    <select id="proxyFilter" onchange="filterRecords()" 
+                            style="padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="">CDN 状态</option>
+                        <option value="true">已启用 CDN</option>
+                        <option value="false">未启用 CDN</option>
+                    </select>
+                    <button class="btn btn-info" onclick="clearFilters()" style="white-space: nowrap;">清除筛选</button>
+                </div>
+            </div>
+
+            <!-- 工具栏 -->
+            <div class="toolbar">
+                <button class="btn btn-success" onclick="showAddRecordModal()">➕ 添加记录</button>
+                <button class="btn btn-info" onclick="showBatchAddModal()">📦 批量添加</button>
+                <button class="btn btn-warning" onclick="showBatchOperationModal()">⚡ 批量操作</button>
+                <button class="btn btn-primary" onclick="exportConfig()">📤 导出配置</button>
+                <button class="btn btn-primary" onclick="showImportModal()">📥 导入配置</button>
+                <button class="btn" onclick="expandAllRecords()" style="background: #6c757d; color: white;">📖 展开全部</button>
+                <button class="btn" onclick="collapseAllRecords()" style="background: #6c757d; color: white;">📕 收起全部</button>
+                <button class="btn btn-danger" onclick="refreshRecords()">🔄 刷新记录</button>
+            </div>
+
+            <!-- 状态消息 -->
+            <div id="statusMessage" style="display: none;"></div>
+
+            <!-- 记录列表表头 -->
+            <div style="background: #f8f9fa; border-radius: 8px 8px 0 0; padding: 8px 16px; margin-bottom: 0; border-bottom: 1px solid #dee2e6; display: none;" id="recordsHeader">
+                <div style="display: grid; grid-template-columns: 24px 80px 60px 1fr 1fr 80px 80px 120px; gap: 12px; align-items: center; font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <div style="text-align: center;">展开</div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <input type="checkbox" id="selectAllRecords" onchange="toggleSelectAll()" style="transform: scale(1.1);">
+                        <span>选择</span>
+                    </div>
+                    <div style="text-align: center;">类型</div>
+                    <div>名称</div>
+                    <div>值</div>
+                    <div style="text-align: center;">TTL</div>
+                    <div style="text-align: center;">状态</div>
+                    <div style="text-align: center;">操作</div>
+                </div>
+            </div>
+
+            <!-- DNS 记录列表 -->
+            <div class="dns-records" id="recordsList">
+                <!-- DNS 记录将在这里动态加载 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑记录模态框 -->
+    <div id="recordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加 DNS 记录</h2>
+                <span class="close" onclick="closeModal('recordModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="recordType">记录类型</label>
+                <select id="recordType">
+                    <option value="A">A - IPv4 地址</option>
+                    <option value="AAAA">AAAA - IPv6 地址</option>
+                    <option value="CNAME">CNAME - 别名</option>
+                    <option value="MX">MX - 邮件交换</option>
+                    <option value="TXT">TXT - 文本记录</option>
+                    <option value="SRV">SRV - 服务记录</option>
+                    <option value="NS">NS - 域名服务器</option>
+                    <option value="PTR">PTR - 指针记录</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="recordName">记录名称</label>
+                <input type="text" id="recordName" placeholder="例如：www 或 @ (根域名)">
+            </div>
+            <div class="form-group">
+                <label for="recordValue">记录值</label>
+                <input type="text" id="recordValue" placeholder="例如：192.168.1.1 或 example.com">
+            </div>
+            <div class="form-group">
+                <label for="recordTTL">TTL (秒)</label>
+                <select id="recordTTL">
+                    <option value="1">自动</option>
+                    <option value="120">2 分钟</option>
+                    <option value="300">5 分钟</option>
+                    <option value="600">10 分钟</option>
+                    <option value="1800">30 分钟</option>
+                    <option value="3600">1 小时</option>
+                    <option value="7200">2 小时</option>
+                    <option value="18000">5 小时</option>
+                    <option value="43200">12 小时</option>
+                    <option value="86400">1 天</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="recordProxied"> 启用 Cloudflare 代理 (CDN)
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-success" onclick="saveRecord()">保存记录</button>
+                <button class="btn" onclick="closeModal('recordModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量添加模态框 -->
+    <div id="batchAddModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>批量添加 DNS 记录</h2>
+                <span class="close" onclick="closeModal('batchAddModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="batchRecords">批量记录 (每行一条记录，格式：类型,名称,值,TTL,是否代理)</label>
+                <textarea id="batchRecords" class="batch-textarea" placeholder="示例：&#10;A,www,192.168.1.1,3600,true&#10;CNAME,mail,mail.example.com,3600,false&#10;TXT,@,&quot;v=spf1 include:_spf.google.com ~all&quot;,3600,false"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-success" onclick="batchAddRecords()">批量添加</button>
+                <button class="btn" onclick="closeModal('batchAddModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作模态框 -->
+    <div id="batchOperationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>批量操作</h2>
+                <span class="close" onclick="closeModal('batchOperationModal')">&times;</span>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn btn-warning" onclick="batchToggleCDN(true)">批量开启 CDN</button>
+                <button class="btn btn-warning" onclick="batchToggleCDN(false)">批量关闭 CDN</button>
+                <button class="btn btn-danger" onclick="batchDeleteRecords()">批量删除选中记录</button>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="selectAllRecordsModal" onchange="toggleSelectAllInModal()"> 全选记录
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" onclick="closeModal('batchOperationModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入配置模态框 -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>导入配置</h2>
+                <span class="close" onclick="closeModal('importModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label for="importFile">选择配置文件 (.json)</label>
+                <input type="file" id="importFile" accept=".json">
+            </div>
+            <div class="form-group">
+                <label for="targetZone">目标域名</label>
+                <select id="targetZone">
+                    <!-- 域名选项将在这里动态加载 -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="replaceExisting"> 替换现有记录（谨慎操作！）
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="importConfig()">开始导入</button>
+                <button class="btn" onclick="closeModal('importModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 代理设置模态框 -->
+    <div id="proxyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🌐 网络代理设置</h2>
+                <span class="close" onclick="closeModal('proxyModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="enableProxy" onchange="toggleProxySettings()"> 启用网络代理
+                </label>
+            </div>
+            <div id="proxySettings" style="display: none;">
+                <div class="form-group">
+                    <label for="proxyType">代理类型</label>
+                    <select id="proxyType">
+                        <option value="http">HTTP</option>
+                        <option value="https">HTTPS</option>
+                        <option value="socks5">SOCKS5</option>
+                    </select>
+                </div>
+                <div class="api-config">
+                    <div class="form-group">
+                        <label for="proxyHost">代理服务器</label>
+                        <input type="text" id="proxyHost" placeholder="例如：127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxyPort">端口</label>
+                        <input type="number" id="proxyPort" placeholder="例如：7890">
+                    </div>
+                </div>
+                <div class="api-config">
+                    <div class="form-group">
+                        <label for="proxyUsername">用户名（可选）</label>
+                        <input type="text" id="proxyUsername" placeholder="代理用户名">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxyPassword">密码（可选）</label>
+                        <input type="password" id="proxyPassword" placeholder="代理密码">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn-info" onclick="testProxyConnection()">测试代理连接</button>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-success" onclick="saveProxySettings()">保存设置</button>
+                <button class="btn" onclick="closeModal('proxyModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错误详情模态框 -->
+    <div id="errorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>❌ 错误详情</h2>
+                <span class="close" onclick="closeModal('errorModal')">&times;</span>
+            </div>
+            <div id="errorDetails" style="background: #f8f9fa; padding: 15px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
+                <!-- 错误详情将在这里显示 -->
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-info" onclick="copyErrorDetails()">复制错误信息</button>
+                <button class="btn" onclick="closeModal('errorModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentZoneId = null;
+        let currentZoneName = null;
+        let allRecords = [];
+        let filteredRecords = [];
+        let editingRecordId = null;
+        let lastSelectedIndex = -1; // 用于 Shift 批量选择
+        let proxySettings = {
+            enabled: false,
+            type: 'http',
+            host: '',
+            port: '',
+            username: '',
+            password: ''
+        };
+
+        // 常见错误码和解决方案
+        const ERROR_SOLUTIONS = {
+            10000: {
+                title: 'API Token 无效',
+                message: 'API Token 格式错误或已过期',
+                solutions: [
+                    '检查 API Token 是否正确复制',
+                    '确认 Token 未过期',
+                    '重新生成新的 API Token'
+                ]
+            },
+            10001: {
+                title: '认证失败',
+                message: '邮箱或 API Token 不匹配',
+                solutions: [
+                    '确认邮箱地址正确',
+                    '检查 API Token 是否属于该邮箱账户',
+                    '尝试使用 Global API Key 替代 Token'
+                ]
+            },
+            10002: {
+                title: '权限不足',
+                message: 'API Token 权限不足',
+                solutions: [
+                    '确保 Token 具有 Zone:Read 权限',
+                    '确保 Token 具有 DNS:Edit 权限',
+                    '检查 Token 的域名范围设置'
+                ]
+            },
+            10004: {
+                title: '请求频率限制',
+                message: 'API 请求过于频繁',
+                solutions: [
+                    '等待几分钟后重试',
+                    '减少批量操作的并发数量',
+                    '升级 Cloudflare 套餐获得更高限制'
+                ]
+            },
+            10006: {
+                title: '网络连接错误',
+                message: '无法连接到 Cloudflare API',
+                solutions: [
+                    '检查网络连接',
+                    '尝试配置网络代理',
+                    '检查防火墙设置',
+                    '确认 DNS 解析正常'
+                ]
+            },
+            81044: {
+                title: 'DNS 记录冲突',
+                message: '记录已存在或与现有记录冲突',
+                solutions: [
+                    '检查是否已存在相同的记录',
+                    '使用不同的记录名称',
+                    '先删除冲突的记录'
+                ]
+            },
+            81053: {
+                title: '记录值无效',
+                message: 'DNS 记录值格式不正确',
+                solutions: [
+                    '检查 IP 地址格式（A/AAAA 记录）',
+                    '检查域名格式（CNAME 记录）',
+                    '确认 TXT 记录格式正确'
+                ]
+            },
+            81057: {
+                title: '记录名称无效',
+                message: 'DNS 记录名称格式不正确',
+                solutions: [
+                    '记录名称不能包含特殊字符',
+                    '使用 @ 表示根域名',
+                    '子域名格式：subdomain'
+                ]
+            }
+        };
+
+        // 加载代理设置
+        function loadProxySettings() {
+            const saved = localStorage.getItem('cf_dns_proxy_settings');
+            if (saved) {
+                proxySettings = JSON.parse(saved);
+            }
+        }
+
+        // 保存代理设置
+        function saveProxySettingsToStorage() {
+            localStorage.setItem('cf_dns_proxy_settings', JSON.stringify(proxySettings));
+        }
+
+        // 获取 API 基础 URL
+        function getApiBaseUrl() {
+            const useProxy = localStorage.getItem('cf_dns_use_proxy') === 'true';
+            if (useProxy) {
+                const proxyUrl = localStorage.getItem('cf_dns_proxy_url') || 'http://localhost:3001/api';
+                return proxyUrl;
+            }
+            return 'https://api.cloudflare.com/client/v4';
+        }
+
+        // API 请求函数（增强错误处理）
+        async function makeCloudflareRequest(endpoint, method = 'GET', data = null) {
+            const apiToken = document.getElementById('apiToken').value;
+            const email = document.getElementById('email').value;
+            
+            if (!apiToken || !email) {
+                throw new Error('请先配置 API Token 和邮箱');
+            }
+
+            const headers = {
+                'X-Auth-Email': email,
+                'X-Auth-Key': apiToken,
+                'Content-Type': 'application/json'
+            };
+
+            const config = {
+                method: method,
+                headers: headers,
+                timeout: 30000 // 30秒超时
+            };
+
+            if (data) {
+                config.body = JSON.stringify(data);
+            }
+
+            try {
+                const apiUrl = `${getApiBaseUrl()}${endpoint}`;
+                console.log('请求 URL:', apiUrl);
+                const response = await fetch(apiUrl, config);
+                
+                if (!response.ok) {
+                    if (response.status === 0 || response.status >= 500) {
+                        throw new Error(`网络连接错误 (${response.status}): 无法连接到 Cloudflare API，请检查网络或尝试配置代理`);
+                    } else if (response.status === 403) {
+                        throw new Error('API Token 权限不足，请检查 Token 权限设置');
+                    } else if (response.status === 401) {
+                        throw new Error('认证失败，请检查 API Token 和邮箱是否正确');
+                    } else if (response.status === 429) {
+                        throw new Error('请求频率过高，请稍后重试');
+                    }
+                }
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    const error = result.errors?.[0];
+                    if (error) {
+                        const errorCode = error.code;
+                        const errorInfo = ERROR_SOLUTIONS[errorCode];
+                        
+                        if (errorInfo) {
+                            showDetailedError(errorInfo, error, result);
+                            throw new Error(`${errorInfo.title}: ${errorInfo.message}`);
+                        } else {
+                            showDetailedError({
+                                title: '未知错误',
+                                message: error.message || '请求失败',
+                                solutions: ['请检查输入参数', '稍后重试', '联系技术支持']
+                            }, error, result);
+                            throw new Error(error.message || '请求失败');
+                        }
+                    } else {
+                        throw new Error('请求失败，未知错误');
+                    }
+                }
+
+                return result;
+            } catch (error) {
+                if (error.name === 'TypeError' && (error.message.includes('fetch') || error.message.includes('CORS'))) {
+                    // 检测到 CORS 错误，显示解决方案
+                    showCorsWarning();
+                    throw new Error('CORS 跨域访问被阻止，请查看上方的解决方案');
+                } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    showCorsWarning();
+                    throw new Error('网络请求被阻止，可能是 CORS 问题，请查看上方的解决方案');
+                }
+                throw error;
+            }
+        }
+
+        // 显示详细错误信息
+        function showDetailedError(errorInfo, originalError, fullResponse) {
+            const errorDetails = document.getElementById('errorDetails');
+            let errorText = `错误类型: ${errorInfo.title}\n`;
+            errorText += `错误描述: ${errorInfo.message}\n\n`;
+            
+            if (originalError.code) {
+                errorText += `错误代码: ${originalError.code}\n`;
+            }
+            
+            errorText += `\n解决方案:\n`;
+            errorInfo.solutions.forEach((solution, index) => {
+                errorText += `${index + 1}. ${solution}\n`;
+            });
+            
+            if (fullResponse) {
+                errorText += `\n完整响应:\n${JSON.stringify(fullResponse, null, 2)}`;
+            }
+            
+            errorDetails.textContent = errorText;
+            document.getElementById('errorModal').style.display = 'block';
+        }
+
+        // 复制错误详情
+        function copyErrorDetails() {
+            const errorDetails = document.getElementById('errorDetails').textContent;
+            navigator.clipboard.writeText(errorDetails).then(() => {
+                showStatus('错误信息已复制到剪贴板', 'success');
+            }).catch(() => {
+                showStatus('复制失败，请手动复制', 'error');
+            });
+        }
+
+        // 显示状态消息（增强版）
+        function showStatus(message, type = 'info', showErrorButton = false) {
+            console.log('showStatus 被调用:', message, type);
+            
+            const statusElement = document.getElementById('statusMessage');
+            if (!statusElement) {
+                console.error('找不到 statusMessage 元素');
+                alert(message); // 备用显示方法
+                return;
+            }
+            
+            statusElement.className = `status-message status-${type}`;
+            
+            let statusContent = message;
+            if (showErrorButton && type === 'error') {
+                statusContent += ' <button class="btn btn-info" onclick="document.getElementById(\'errorModal\').style.display=\'block\'" style="margin-left: 10px; padding: 4px 8px; font-size: 12px;">查看详情</button>';
+            }
+            
+            statusElement.innerHTML = statusContent;
+            statusElement.style.display = 'block';
+            
+            console.log('状态消息已显示');
+            
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, showErrorButton ? 10000 : 5000);
+        }
+
+        // 加载域名列表
+        async function loadZones() {
+            console.log('loadZones 函数被调用');
+            
+            // 找到正确的按钮
+            const button = event ? event.target : document.querySelector('.btn-primary');
+            if (!button) {
+                console.error('找不到按钮');
+                showStatus('系统错误：找不到按钮元素', 'error');
+                return;
+            }
+            
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="loading"></span> 加载中...';
+            button.disabled = true;
+
+            try {
+                const result = await makeCloudflareRequest('/zones');
+                const zones = result.result;
+
+                const zoneSelector = document.getElementById('zoneSelector');
+                zoneSelector.innerHTML = '';
+
+                zones.forEach(zone => {
+                    const zoneItem = document.createElement('div');
+                    zoneItem.className = 'zone-item';
+                    zoneItem.innerHTML = `
+                        <strong>${zone.name}</strong>
+                        <br>
+                        <small>状态: ${zone.status} | 类型: ${zone.type}</small>
+                    `;
+                    zoneItem.onclick = () => selectZone(zone.id, zone.name);
+                    zoneSelector.appendChild(zoneItem);
+                });
+
+                document.getElementById('zoneCard').style.display = 'block';
+                showStatus(`成功加载 ${zones.length} 个域名`, 'success');
+
+            } catch (error) {
+                showStatus(`加载失败: ${error.message}`, 'error', true);
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // 选择域名
+        async function selectZone(zoneId, zoneName) {
+            // 更新选中状态
+            document.querySelectorAll('.zone-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.target.closest('.zone-item').classList.add('selected');
+
+            currentZoneId = zoneId;
+            currentZoneName = zoneName;
+
+            // 显示记录管理卡片
+            document.getElementById('recordsCard').style.display = 'block';
+
+            // 加载 DNS 记录
+            await loadDNSRecords();
+
+            // 更新统计信息
+            updateStats();
+
+            showStatus(`已选择域名: ${zoneName}`, 'success');
+        }
+
+        // 加载 DNS 记录
+        async function loadDNSRecords() {
+            if (!currentZoneId) return;
+
+            try {
+                const result = await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records`);
+                allRecords = result.result;
+                renderDNSRecords();
+                updateStats();
+            } catch (error) {
+                showStatus(`加载 DNS 记录失败: ${error.message}`, 'error', true);
+            }
+        }
+
+        // 渲染 DNS 记录
+        function renderDNSRecords() {
+            const recordsList = document.getElementById('recordsList');
+            const recordsHeader = document.getElementById('recordsHeader');
+            recordsList.innerHTML = '';
+
+            const recordsToRender = filteredRecords.length > 0 ? filteredRecords : allRecords;
+            
+            if (allRecords.length === 0) {
+                recordsHeader.style.display = 'none';
+                recordsList.className = 'dns-records no-header';
+                recordsList.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">📋</div>
+                        <h3 style="margin-bottom: 10px; color: #888;">暂无 DNS 记录</h3>
+                        <p>点击上方"添加记录"按钮开始添加 DNS 记录</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 显示表头并设置列表样式
+            recordsHeader.style.display = 'block';
+            recordsList.className = 'dns-records';
+
+            if (filteredRecords.length === 0 && (
+                document.getElementById('searchRecords').value ||
+                document.getElementById('typeFilter').value ||
+                document.getElementById('proxyFilter').value
+            )) {
+                recordsList.innerHTML = `
+                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🔍</div>
+                        <h3 style="margin-bottom: 10px; color: #888;">未找到匹配的记录</h3>
+                        <p>尝试调整搜索条件或<button class="btn btn-info" onclick="clearFilters()" style="margin-left: 5px;">清除筛选</button></p>
+                    </div>
+                `;
+                return;
+            }
+
+            recordsToRender.forEach(record => {
+                const recordItem = document.createElement('div');
+                recordItem.className = 'record-item';
+                recordItem.dataset.recordId = record.id;
+                
+                // 处理记录名称显示
+                const displayName = record.name.replace(`.${currentZoneName}`, '') || '@';
+                
+                recordItem.innerHTML = `
+                    <div class="record-summary" onclick="toggleRecordDetails('${record.id}')">
+                        <div class="expand-icon">▶</div>
+                        <div class="checkbox-container" onclick="event.stopPropagation()">
+                            <input type="checkbox" class="record-checkbox" data-record-id="${record.id}" 
+                                   data-record-index="${recordsToRender.indexOf(record)}"
+                                   onchange="handleCheckboxChange(event, ${recordsToRender.indexOf(record)})">
+                        </div>
+                        <span class="record-type type-${record.type}">${record.type}</span>
+                        <div class="record-name-compact">${displayName}</div>
+                        <div class="record-value-compact" title="${record.content}">${record.content}</div>
+                        <div class="record-ttl-compact">${record.ttl === 1 ? '自动' : record.ttl + 's'}</div>
+                        <div class="record-status-compact">
+                            <div class="status-dot ${record.proxied ? 'proxied' : ''}"></div>
+                            <span>${record.proxied ? 'CDN' : 'DNS'}</span>
+                        </div>
+                        <div class="record-actions-compact" onclick="event.stopPropagation()">
+                            <button class="btn-compact btn-edit" onclick="editRecord('${record.id}')" title="编辑">✏️</button>
+                            <button class="btn-compact btn-copy" onclick="copyRecord('${record.id}')" title="复制">📋</button>
+                            <button class="btn-compact btn-delete" onclick="deleteRecord('${record.id}')" title="删除">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="record-details" id="details-${record.id}">
+                        <div class="record-details-grid">
+                            <div class="detail-item">
+                                <div class="detail-label">完整域名</div>
+                                <div class="detail-value">${record.name}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">记录值</div>
+                                <div class="detail-value monospace">${record.content}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">TTL</div>
+                                <div class="detail-value">${record.ttl === 1 ? '自动' : record.ttl + ' 秒'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">记录 ID</div>
+                                <div class="detail-value monospace">${record.id}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">创建时间</div>
+                                <div class="detail-value">${record.created_on ? new Date(record.created_on).toLocaleString('zh-CN') : '未知'}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">修改时间</div>
+                                <div class="detail-value">${record.modified_on ? new Date(record.modified_on).toLocaleString('zh-CN') : '未知'}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid #e9ecef;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div class="cdn-toggle">
+                                    <input type="checkbox" id="cdn-${record.id}" ${record.proxied ? 'checked' : ''} 
+                                           onchange="toggleCDN('${record.id}', this.checked)">
+                                    <label class="slider" for="cdn-${record.id}"></label>
+                                </div>
+                                <span style="font-size: 14px; color: #666;">
+                                    ${record.proxied ? '🟠 Cloudflare CDN 已启用' : '🟢 仅 DNS 解析'}
+                                </span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-info" onclick="editRecord('${record.id}')">✏️ 编辑记录</button>
+                                <button class="btn btn-success" onclick="copyRecord('${record.id}')">📋 复制记录</button>
+                                <button class="btn btn-danger" onclick="deleteRecord('${record.id}')">🗑️ 删除记录</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                recordsList.appendChild(recordItem);
+            });
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const stats = {
+                total: allRecords.length,
+                proxied: allRecords.filter(r => r.proxied).length,
+                types: {}
+            };
+
+            allRecords.forEach(record => {
+                stats.types[record.type] = (stats.types[record.type] || 0) + 1;
+            });
+
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">总记录数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.proxied}</div>
+                    <div class="stat-label">CDN 启用</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${Object.keys(stats.types).length}</div>
+                    <div class="stat-label">记录类型</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.types.A || 0}</div>
+                    <div class="stat-label">A 记录</div>
+                </div>
+            `;
+        }
+
+        // 显示添加记录模态框
+        function showAddRecordModal() {
+            editingRecordId = null;
+            document.getElementById('modalTitle').textContent = '添加 DNS 记录';
+            clearRecordForm();
+            document.getElementById('recordModal').style.display = 'block';
+        }
+
+        // 编辑记录
+        function editRecord(recordId) {
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) return;
+
+            editingRecordId = recordId;
+            document.getElementById('modalTitle').textContent = '编辑 DNS 记录';
+            
+            document.getElementById('recordType').value = record.type;
+            document.getElementById('recordName').value = record.name.replace(`.${currentZoneName}`, '') || '@';
+            document.getElementById('recordValue').value = record.content;
+            document.getElementById('recordTTL').value = record.ttl;
+            document.getElementById('recordProxied').checked = record.proxied;
+            
+            document.getElementById('recordModal').style.display = 'block';
+        }
+
+        // 保存记录
+        async function saveRecord() {
+            const type = document.getElementById('recordType').value;
+            const name = document.getElementById('recordName').value;
+            const content = document.getElementById('recordValue').value;
+            const ttl = parseInt(document.getElementById('recordTTL').value);
+            const proxied = document.getElementById('recordProxied').checked;
+
+            if (!name || !content) {
+                showStatus('请填写完整的记录信息', 'error');
+                return;
+            }
+
+            const recordData = {
+                type: type,
+                name: name === '@' ? currentZoneName : name,
+                content: content,
+                ttl: ttl,
+                proxied: proxied
+            };
+
+            try {
+                if (editingRecordId) {
+                    // 更新记录
+                    await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records/${editingRecordId}`, 'PUT', recordData);
+                    showStatus('记录更新成功', 'success');
+                } else {
+                    // 创建记录
+                    await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records`, 'POST', recordData);
+                    showStatus('记录添加成功', 'success');
+                }
+
+                closeModal('recordModal');
+                await loadDNSRecords();
+            } catch (error) {
+                showStatus(`操作失败: ${error.message}`, 'error', true);
+            }
+        }
+
+        // 删除记录
+        async function deleteRecord(recordId) {
+            if (!confirm('确定要删除这条 DNS 记录吗？')) return;
+
+            try {
+                await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records/${recordId}`, 'DELETE');
+                showStatus('记录删除成功', 'success');
+                await loadDNSRecords();
+            } catch (error) {
+                showStatus(`删除失败: ${error.message}`, 'error', true);
+            }
+        }
+
+        // 切换 CDN 状态
+        async function toggleCDN(recordId, enabled) {
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) return;
+
+            const recordData = {
+                type: record.type,
+                name: record.name,
+                content: record.content,
+                ttl: record.ttl,
+                proxied: enabled
+            };
+
+            try {
+                await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records/${recordId}`, 'PUT', recordData);
+                showStatus(`CDN ${enabled ? '启用' : '禁用'}成功`, 'success');
+                await loadDNSRecords();
+            } catch (error) {
+                showStatus(`CDN 切换失败: ${error.message}`, 'error', true);
+                // 恢复复选框状态
+                document.getElementById(`cdn-${recordId}`).checked = !enabled;
+            }
+        }
+
+        // 显示批量添加模态框
+        function showBatchAddModal() {
+            document.getElementById('batchAddModal').style.display = 'block';
+        }
+
+        // 批量添加记录
+        async function batchAddRecords() {
+            const batchText = document.getElementById('batchRecords').value.trim();
+            if (!batchText) {
+                showStatus('请输入批量记录数据', 'error');
+                return;
+            }
+
+            const lines = batchText.split('\n').filter(line => line.trim());
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const line of lines) {
+                try {
+                    const parts = line.split(',').map(p => p.trim());
+                    if (parts.length < 3) continue;
+
+                    const [type, name, content, ttl = '3600', proxied = 'false'] = parts;
+                    
+                    const recordData = {
+                        type: type.toUpperCase(),
+                        name: name === '@' ? currentZoneName : name,
+                        content: content.replace(/"/g, ''),
+                        ttl: parseInt(ttl),
+                        proxied: proxied.toLowerCase() === 'true'
+                    };
+
+                    await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records`, 'POST', recordData);
+                    successCount++;
+                } catch (error) {
+                    errorCount++;
+                    console.error(`添加记录失败: ${line}`, error);
+                }
+            }
+
+            showStatus(`批量添加完成: 成功 ${successCount} 条，失败 ${errorCount} 条`, 
+                      errorCount > 0 ? 'warning' : 'success');
+            
+            closeModal('batchAddModal');
+            await loadDNSRecords();
+        }
+
+        // 显示批量操作模态框
+        function showBatchOperationModal() {
+            document.getElementById('batchOperationModal').style.display = 'block';
+        }
+
+        // 批量切换 CDN
+        async function batchToggleCDN(enabled) {
+            const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                showStatus('请先选择要操作的记录', 'error');
+                return;
+            }
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const checkbox of checkedBoxes) {
+                try {
+                    const recordId = checkbox.dataset.recordId;
+                    const record = allRecords.find(r => r.id === recordId);
+                    
+                    const recordData = {
+                        type: record.type,
+                        name: record.name,
+                        content: record.content,
+                        ttl: record.ttl,
+                        proxied: enabled
+                    };
+
+                    await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records/${recordId}`, 'PUT', recordData);
+                    successCount++;
+                } catch (error) {
+                    errorCount++;
+                }
+            }
+
+            showStatus(`批量 CDN ${enabled ? '启用' : '禁用'}完成: 成功 ${successCount} 条，失败 ${errorCount} 条`, 
+                      errorCount > 0 ? 'warning' : 'success');
+            
+            await loadDNSRecords();
+        }
+
+        // 批量删除记录
+        async function batchDeleteRecords() {
+            const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                showStatus('请先选择要删除的记录', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要删除选中的 ${checkedBoxes.length} 条记录吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const checkbox of checkedBoxes) {
+                try {
+                    const recordId = checkbox.dataset.recordId;
+                    await makeCloudflareRequest(`/zones/${currentZoneId}/dns_records/${recordId}`, 'DELETE');
+                    successCount++;
+                } catch (error) {
+                    errorCount++;
+                }
+            }
+
+            showStatus(`批量删除完成: 成功 ${successCount} 条，失败 ${errorCount} 条`, 
+                      errorCount > 0 ? 'warning' : 'success');
+            
+            await loadDNSRecords();
+        }
+
+        // 批量操作模态框中的全选功能
+        function toggleSelectAllInModal() {
+            const selectAll = document.getElementById('selectAllRecordsModal');
+            const checkboxes = document.querySelectorAll('.record-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll.checked;
+            });
+            
+            // 重置最后选择的索引
+            lastSelectedIndex = -1;
+        }
+
+        // 导出配置
+        function exportConfig() {
+            if (!currentZoneName || allRecords.length === 0) {
+                showStatus('没有可导出的记录', 'error');
+                return;
+            }
+
+            // 获取选中的记录
+            const selectedCheckboxes = document.querySelectorAll('.record-checkbox:checked');
+            const selectedRecordIds = Array.from(selectedCheckboxes).map(cb => cb.dataset.recordId);
+            
+            let recordsToExport = allRecords;
+            let exportType = '全部';
+            
+            if (selectedRecordIds.length > 0) {
+                recordsToExport = allRecords.filter(record => selectedRecordIds.includes(record.id));
+                exportType = '选中';
+            }
+
+            const config = {
+                zoneName: currentZoneName,
+                exportDate: new Date().toISOString(),
+                exportType: exportType,
+                totalRecords: recordsToExport.length,
+                records: recordsToExport.map(record => ({
+                    type: record.type,
+                    name: record.name.replace(`.${currentZoneName}`, '') || '@',
+                    content: record.content,
+                    ttl: record.ttl,
+                    proxied: record.proxied
+                }))
+            };
+
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const filename = selectedRecordIds.length > 0 
+                ? `${currentZoneName}_selected_${selectedRecordIds.length}_records.json`
+                : `${currentZoneName}_all_records.json`;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            const message = selectedRecordIds.length > 0 
+                ? `已导出 ${selectedRecordIds.length} 条选中记录: ${filename}`
+                : `已导出全部 ${recordsToExport.length} 条记录: ${filename}`;
+            showStatus(message, 'success');
+        }
+
+        // 显示导入模态框
+        function showImportModal() {
+            // 填充目标域名选项
+            const targetZoneSelect = document.getElementById('targetZone');
+            targetZoneSelect.innerHTML = '';
+            
+            document.querySelectorAll('.zone-item').forEach(item => {
+                const zoneName = item.querySelector('strong').textContent;
+                const option = document.createElement('option');
+                option.value = zoneName;
+                option.textContent = zoneName;
+                
+                // 如果是当前选中的域名，设为默认选中
+                if (zoneName === currentZoneName) {
+                    option.selected = true;
+                }
+                
+                targetZoneSelect.appendChild(option);
+            });
+
+            document.getElementById('importModal').style.display = 'block';
+        }
+
+        // 导入配置
+        async function importConfig() {
+            const fileInput = document.getElementById('importFile');
+            const targetZone = document.getElementById('targetZone').value;
+            const replaceExisting = document.getElementById('replaceExisting').checked;
+
+            if (!fileInput.files[0]) {
+                showStatus('请选择配置文件', 'error');
+                return;
+            }
+
+            if (!targetZone) {
+                showStatus('请选择目标域名', 'error');
+                return;
+            }
+
+            try {
+                const fileContent = await fileInput.files[0].text();
+                const config = JSON.parse(fileContent);
+
+                if (!config.records || !Array.isArray(config.records)) {
+                    throw new Error('配置文件格式错误');
+                }
+
+                // 找到目标域名的 zone ID
+                const targetZoneId = await getZoneIdByName(targetZone);
+                if (!targetZoneId) {
+                    throw new Error('找不到目标域名');
+                }
+
+                // 如果选择替换现有记录，先删除所有记录
+                if (replaceExisting) {
+                    const existingRecords = await makeCloudflareRequest(`/zones/${targetZoneId}/dns_records`);
+                    for (const record of existingRecords.result) {
+                        try {
+                            await makeCloudflareRequest(`/zones/${targetZoneId}/dns_records/${record.id}`, 'DELETE');
+                        } catch (error) {
+                            console.error('删除记录失败:', error);
+                        }
+                    }
+                }
+
+                // 导入新记录
+                let successCount = 0;
+                let errorCount = 0;
+
+                for (const record of config.records) {
+                    try {
+                        const recordData = {
+                            type: record.type,
+                            name: record.name === '@' ? targetZone : record.name,
+                            content: record.content,
+                            ttl: record.ttl,
+                            proxied: record.proxied
+                        };
+
+                        await makeCloudflareRequest(`/zones/${targetZoneId}/dns_records`, 'POST', recordData);
+                        successCount++;
+                    } catch (error) {
+                        errorCount++;
+                        console.error('导入记录失败:', record, error);
+                    }
+                }
+
+                showStatus(`导入完成: 成功 ${successCount} 条，失败 ${errorCount} 条`, 
+                          errorCount > 0 ? 'warning' : 'success');
+                
+                closeModal('importModal');
+                
+                // 如果导入到当前选中的域名，刷新记录
+                if (targetZone === currentZoneName) {
+                    await loadDNSRecords();
+                }
+
+            } catch (error) {
+                showStatus(`导入失败: ${error.message}`, 'error', true);
+            }
+        }
+
+        // 根据域名获取 zone ID
+        async function getZoneIdByName(zoneName) {
+            try {
+                const result = await makeCloudflareRequest('/zones');
+                const zone = result.result.find(z => z.name === zoneName);
+                return zone ? zone.id : null;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        // 刷新记录
+        async function refreshRecords() {
+            if (currentZoneId) {
+                await loadDNSRecords();
+                showStatus('记录已刷新', 'success');
+            }
+        }
+
+        // 清空记录表单
+        function clearRecordForm() {
+            document.getElementById('recordType').value = 'A';
+            document.getElementById('recordName').value = '';
+            document.getElementById('recordValue').value = '';
+            document.getElementById('recordTTL').value = '3600';
+            document.getElementById('recordProxied').checked = false;
+        }
+
+        // 关闭模态框
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // 显示代理设置模态框
+        function showProxyModal() {
+            loadProxySettings();
+            document.getElementById('enableProxy').checked = proxySettings.enabled;
+            document.getElementById('proxyType').value = proxySettings.type;
+            document.getElementById('proxyHost').value = proxySettings.host;
+            document.getElementById('proxyPort').value = proxySettings.port;
+            document.getElementById('proxyUsername').value = proxySettings.username;
+            document.getElementById('proxyPassword').value = proxySettings.password;
+            
+            toggleProxySettings();
+            document.getElementById('proxyModal').style.display = 'block';
+        }
+
+        // 切换代理设置显示
+        function toggleProxySettings() {
+            const enabled = document.getElementById('enableProxy').checked;
+            document.getElementById('proxySettings').style.display = enabled ? 'block' : 'none';
+        }
+
+        // 保存代理设置
+        function saveProxySettings() {
+            proxySettings.enabled = document.getElementById('enableProxy').checked;
+            proxySettings.type = document.getElementById('proxyType').value;
+            proxySettings.host = document.getElementById('proxyHost').value;
+            proxySettings.port = document.getElementById('proxyPort').value;
+            proxySettings.username = document.getElementById('proxyUsername').value;
+            proxySettings.password = document.getElementById('proxyPassword').value;
+            
+            saveProxySettingsToStorage();
+            showStatus('代理设置已保存', 'success');
+            closeModal('proxyModal');
+        }
+
+        // 测试代理连接
+        async function testProxyConnection() {
+            console.log('testProxyConnection 函数被调用');
+            
+            // 找到正确的按钮
+            const button = event ? event.target : document.querySelector('.btn-info');
+            if (!button) {
+                console.error('找不到代理测试按钮');
+                showStatus('系统错误：找不到按钮元素', 'error');
+                return;
+            }
+            
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="loading"></span> 测试中...';
+            button.disabled = true;
+
+            try {
+                // 这里只能测试基本连通性，实际代理功能需要浏览器扩展或桌面应用支持
+                const testUrl = 'https://api.cloudflare.com/client/v4/user';
+                const response = await fetch(testUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-Auth-Email': document.getElementById('email').value || 'test@example.com',
+                        'X-Auth-Key': document.getElementById('apiToken').value || 'test-token'
+                    }
+                });
+                
+                if (response.status === 401 || response.status === 403) {
+                    showStatus('网络连接正常，但 API 凭据无效', 'warning');
+                } else if (response.ok) {
+                    showStatus('连接测试成功！', 'success');
+                } else {
+                    showStatus(`连接测试失败，状态码: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`连接测试失败: ${error.message}`, 'error');
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // 测试 API 连接
+        async function testConnection() {
+            console.log('testConnection 函数被调用');
+            
+            // 找到正确的按钮
+            const button = event ? event.target : document.querySelector('.btn-warning');
+            const originalText = button.innerHTML;
+            
+            console.log('按钮找到:', button);
+            
+            button.innerHTML = '<span class="loading"></span> 测试中...';
+            button.disabled = true;
+
+            try {
+                console.log('开始 API 请求');
+                const result = await makeCloudflareRequest('/user');
+                console.log('API 请求结果:', result);
+                
+                if (result.success) {
+                    const user = result.result;
+                    showStatus(`连接成功！用户: ${user.email}`, 'success');
+                } else {
+                    showStatus('连接失败，请检查配置', 'error', true);
+                }
+            } catch (error) {
+                console.error('连接测试错误:', error);
+                showStatus(`连接测试失败: ${error.message}`, 'error', true);
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // 显示 CORS 警告
+        function showCorsWarning() {
+            document.getElementById('corsWarning').style.display = 'block';
+            // 滚动到警告区域
+            document.getElementById('corsWarning').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 隐藏 CORS 警告
+        function hideCorsWarning() {
+            document.getElementById('corsWarning').style.display = 'none';
+        }
+
+        // 测试 CORS 是否已修复
+        async function testCorsFixed() {
+            hideCorsWarning();
+            await testConnection();
+        }
+
+        // 复制到剪贴板
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus('命令已复制到剪贴板', 'success');
+            }).catch(() => {
+                // 备用复制方法
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showStatus('命令已复制到剪贴板', 'success');
+            });
+        }
+
+        // 启动代理服务器（模拟）
+        function startProxyServer() {
+            const statusDiv = document.getElementById('proxyServerStatus');
+            statusDiv.innerHTML = '<span style="color: #ffd700;">⚠️ 注意：浏览器环境无法直接启动服务器</span><br>';
+            statusDiv.innerHTML += '<span style="font-size: 12px;">建议使用方案一或方案二解决 CORS 问题</span>';
+            
+            // 提供 Node.js 代理服务器代码
+            setTimeout(() => {
+                statusDiv.innerHTML += '<br><br><strong>可选：创建 Node.js 代理服务器</strong><br>';
+                statusDiv.innerHTML += '<button class="btn" style="background: rgba(255,255,255,0.2); font-size: 11px; padding: 4px 8px;" onclick="showProxyServerCode()">查看代理服务器代码</button>';
+            }, 1000);
+        }
+
+        // 显示代理服务器代码
+        function showProxyServerCode() {
+            const code = `// proxy-server.js
+const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+
+app.use('/api', createProxyMiddleware({
+    target: 'https://api.cloudflare.com',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/api': '/client/v4'
+    }
+}));
+
+app.listen(3001, () => {
+    console.log('代理服务器运行在 http://localhost:3001');
+});
+
+// 安装依赖: npm install express http-proxy-middleware cors
+// 运行: node proxy-server.js`;
+            
+            const blob = new Blob([code], { type: 'text/javascript' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'proxy-server.js';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showStatus('代理服务器代码已下载', 'success');
+        }
+
+        // 测试状态显示功能
+        function testStatusDisplay() {
+            console.log('测试状态显示功能');
+            showStatus('这是一个测试消息！如果您能看到这条消息，说明状态显示功能正常工作。', 'success');
+        }
+
+        // 切换连接模式
+        function switchConnectionMode() {
+            const useProxy = document.getElementById('proxyMode').checked;
+            const proxyUrlInput = document.getElementById('proxyUrl');
+            
+            if (useProxy) {
+                proxyUrlInput.style.display = 'block';
+                localStorage.setItem('cf_dns_use_proxy', 'true');
+                localStorage.setItem('cf_dns_proxy_url', proxyUrlInput.value);
+                showStatus('已切换到代理模式', 'success');
+            } else {
+                proxyUrlInput.style.display = 'none';
+                localStorage.setItem('cf_dns_use_proxy', 'false');
+                showStatus('已切换到直接连接模式', 'info');
+            }
+        }
+
+        // 加载连接模式设置
+        function loadConnectionMode() {
+            const useProxy = localStorage.getItem('cf_dns_use_proxy') === 'true';
+            const proxyUrl = localStorage.getItem('cf_dns_proxy_url') || 'http://localhost:3001/api';
+            
+            if (useProxy) {
+                document.getElementById('proxyMode').checked = true;
+                document.getElementById('proxyUrl').style.display = 'block';
+                document.getElementById('proxyUrl').value = proxyUrl;
+            } else {
+                document.getElementById('directMode').checked = true;
+                document.getElementById('proxyUrl').style.display = 'none';
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面加载完成，开始初始化');
+            loadProxySettings();
+            loadConnectionMode();
+            
+            // 测试状态消息区域是否存在
+            const statusElement = document.getElementById('statusMessage');
+            if (statusElement) {
+                console.log('statusMessage 元素找到');
+            } else {
+                console.error('statusMessage 元素未找到');
+            }
+        });
+
+        // 搜索和筛选功能
+        function filterRecords() {
+            const searchTerm = document.getElementById('searchRecords').value.toLowerCase();
+            const typeFilter = document.getElementById('typeFilter').value;
+            const proxyFilter = document.getElementById('proxyFilter').value;
+
+            filteredRecords = allRecords.filter(record => {
+                // 搜索筛选
+                const matchesSearch = !searchTerm || 
+                    record.name.toLowerCase().includes(searchTerm) ||
+                    record.content.toLowerCase().includes(searchTerm) ||
+                    record.type.toLowerCase().includes(searchTerm);
+
+                // 类型筛选
+                const matchesType = !typeFilter || record.type === typeFilter;
+
+                // CDN 状态筛选
+                const matchesProxy = !proxyFilter || 
+                    (proxyFilter === 'true' && record.proxied) ||
+                    (proxyFilter === 'false' && !record.proxied);
+
+                return matchesSearch && matchesType && matchesProxy;
+            });
+
+            renderDNSRecords();
+            updateFilteredStats();
+        }
+
+        // 清除筛选
+        function clearFilters() {
+            document.getElementById('searchRecords').value = '';
+            document.getElementById('typeFilter').value = '';
+            document.getElementById('proxyFilter').value = '';
+            filteredRecords = [];
+            renderDNSRecords();
+            updateStats();
+        }
+
+        // 更新筛选后的统计信息
+        function updateFilteredStats() {
+            const recordsToShow = filteredRecords.length > 0 ? filteredRecords : allRecords;
+            const stats = {
+                total: recordsToShow.length,
+                proxied: recordsToShow.filter(r => r.proxied).length,
+                types: {}
+            };
+
+            recordsToShow.forEach(record => {
+                stats.types[record.type] = (stats.types[record.type] || 0) + 1;
+            });
+
+            const statsGrid = document.getElementById('statsGrid');
+            const filterInfo = filteredRecords.length > 0 ? ` (筛选后)` : '';
+            
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${stats.total}</div>
+                    <div class="stat-label">记录数${filterInfo}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.proxied}</div>
+                    <div class="stat-label">CDN 启用</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${Object.keys(stats.types).length}</div>
+                    <div class="stat-label">记录类型</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.types.A || 0}</div>
+                    <div class="stat-label">A 记录</div>
+                </div>
+            `;
+        }
+
+        // 切换记录详细信息显示
+        function toggleRecordDetails(recordId) {
+            const recordItem = document.querySelector(`[data-record-id="${recordId}"]`).closest('.record-item');
+            const detailsDiv = document.getElementById(`details-${recordId}`);
+            
+            if (recordItem.classList.contains('expanded')) {
+                // 收起
+                recordItem.classList.remove('expanded');
+                detailsDiv.classList.remove('expanded');
+                detailsDiv.style.display = 'none';
+            } else {
+                // 展开
+                recordItem.classList.add('expanded');
+                detailsDiv.style.display = 'block';
+                detailsDiv.classList.add('expanded');
+            }
+        }
+
+        // 展开所有记录详情
+        function expandAllRecords() {
+            document.querySelectorAll('.record-item').forEach(item => {
+                const recordId = item.dataset.recordId;
+                const detailsDiv = document.getElementById(`details-${recordId}`);
+                
+                item.classList.add('expanded');
+                detailsDiv.style.display = 'block';
+                detailsDiv.classList.add('expanded');
+            });
+        }
+
+        // 收起所有记录详情
+        function collapseAllRecords() {
+            document.querySelectorAll('.record-item').forEach(item => {
+                const recordId = item.dataset.recordId;
+                const detailsDiv = document.getElementById(`details-${recordId}`);
+                
+                item.classList.remove('expanded');
+                detailsDiv.classList.remove('expanded');
+                detailsDiv.style.display = 'none';
+            });
+        }
+
+        // 处理复选框变化，支持 Shift 批量选择
+        function handleCheckboxChange(event, currentIndex) {
+            const checkbox = event.target;
+            const isShiftPressed = event.shiftKey;
+            
+            if (isShiftPressed && lastSelectedIndex !== -1 && lastSelectedIndex !== currentIndex) {
+                // 如果按住 Shift，从第一个选中的到当前点击的都要被选中
+                const startIndex = Math.min(lastSelectedIndex, currentIndex);
+                const endIndex = Math.max(lastSelectedIndex, currentIndex);
+                
+                // 批量选中从 startIndex 到 endIndex 的所有记录
+                for (let i = startIndex; i <= endIndex; i++) {
+                    const targetCheckbox = document.querySelector(`[data-record-index="${i}"]`);
+                    if (targetCheckbox) {
+                        targetCheckbox.checked = true; // 强制选中
+                    }
+                }
+            }
+            
+            // 更新最后选择的索引（只有在选中时才更新）
+            if (checkbox.checked || !isShiftPressed) {
+                lastSelectedIndex = currentIndex;
+            }
+        }
+
+        // 复制记录功能
+        function copyRecord(recordId) {
+            const record = allRecords.find(r => r.id === recordId);
+            if (!record) {
+                showStatus('找不到要复制的记录', 'error');
+                return;
+            }
+            
+            // 清空编辑状态
+            editingRecordId = null;
+            document.getElementById('modalTitle').textContent = '复制 DNS 记录';
+            
+            // 填充表单，但清空记录名称
+            document.getElementById('recordType').value = record.type;
+            document.getElementById('recordName').value = ''; // 记录名称留空
+            document.getElementById('recordValue').value = record.content;
+            document.getElementById('recordTTL').value = record.ttl;
+            document.getElementById('recordProxied').checked = record.proxied;
+            
+            // 显示模态框
+            document.getElementById('recordModal').style.display = 'block';
+            
+            // 自动聚焦到记录名称输入框
+            setTimeout(() => {
+                document.getElementById('recordName').focus();
+            }, 100);
+            
+            showStatus(`已复制记录信息，请输入新的记录名称`, 'info');
+        }
+
+        // 全选/取消全选功能
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAllRecords');
+            const checkboxes = document.querySelectorAll('.record-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll.checked;
+            });
+            
+            // 重置最后选择的索引
+            lastSelectedIndex = -1;
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

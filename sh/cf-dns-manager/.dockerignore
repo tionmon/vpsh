@@ -1,0 +1,52 @@
+# Docker 忽略文件
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 安装脚本
+*.sh
+!start.sh
+
+# 文档
+*.md
+!README.md
+
+# 配置文件
+.env
+.env.local
+.env.production
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志文件
+logs/
+*.log
+
+# 临时文件
+tmp/
+temp/
+
+# 备份文件
+*.bak
+*.backup
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.rar
+
+# 其他部署相关文件
+nginx-cf-dns.conf
+cf-dns-manager.service
+docker-compose.yml

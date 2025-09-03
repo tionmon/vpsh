@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  cf-dns-manager:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: cf-dns-manager
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - NPM_CONFIG_FUND=false
+      - NPM_CONFIG_AUDIT=false
+      - NPM_CONFIG_UPDATE_NOTIFIER=false
+    volumes:
+      # 可选：挂载日志目录
+      - cf-dns-logs:/app/logs
+      # 可选：挂载配置目录
+      - cf-dns-config:/app/config
+    networks:
+      - cf-dns-network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:3001/health || curl -f http://localhost:3001/ || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cf-dns.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.cf-dns.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cf-dns.loadbalancer.server.port=3001"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 可选：添加 Nginx 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: cf-dns-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-cf-dns.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+    depends_on:
+      - cf-dns-manager
+    networks:
+      - cf-dns-network
+    profiles:
+      - nginx
+
+volumes:
+  cf-dns-logs:
+    driver: local
+  cf-dns-config:
+    driver: local
+
+networks:
+  cf-dns-network:
+    driver: bridge
