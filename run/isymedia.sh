@@ -31,6 +31,8 @@ print_header() {
     echo -e "${BLUE}    Media 服务一键部署脚本${NC}"
     echo -e "${BLUE}================================${NC}"
     echo ""
+    print_warning "如有，请将 StrmAssistant lic 放入 /root/sa 文件夹"
+    echo ""
 }
 
 # 检查网络连接
@@ -559,7 +561,7 @@ get_dockercopilot_secretkey() {
 download_and_extract_aaaa() {
     print_message "开始下载和解压aaaa.tar.gz文件..."
     
-    local download_url="https://cloud.7so.top/f/Elw2hp/aaaa.tar.gz"
+    local download_url="https://cloud.7so.top/f/GZ0EHA/aaaa.tar.gz"
     local target_dir="/home/docker"
     local temp_file="/tmp/aaaa.tar.gz"
     
@@ -641,6 +643,70 @@ download_and_extract_aaaa() {
     fi
     
     print_message "aaaa.tar.gz 下载和解压完成"
+}
+
+# 处理StrmAssistant license文件
+process_strmassistant_license() {
+    print_message "检查StrmAssistant license文件..."
+    
+    local source_dir="/root/sa"
+    local target_dir="/home/docker/aaaa/emby/config/plugins/configurations"
+    local device_file="/home/docker/aaaa/emby/config/data/device.txt"
+    
+    # 检查源目录是否存在
+    if [ ! -d "$source_dir" ]; then
+        print_message "未找到 /root/sa 目录，跳过license文件处理"
+        return 0
+    fi
+    
+    # 查找lic文件
+    local lic_files=($(find "$source_dir" -name "*.lic" 2>/dev/null))
+    
+    if [ ${#lic_files[@]} -eq 0 ]; then
+        print_message "未找到lic文件，跳过license文件处理"
+        return 0
+    fi
+    
+    # 如果找到多个lic文件，使用第一个
+    local lic_file="${lic_files[0]}"
+    local lic_filename=$(basename "$lic_file")
+    local lic_name="${lic_filename%.lic}"
+    
+    print_message "找到license文件: $lic_filename"
+    
+    # 确保目标目录存在
+    mkdir -p "$target_dir"
+    mkdir -p "$(dirname "$device_file")"
+    
+    # 移动lic文件到目标位置
+    local target_lic_file="$target_dir/$lic_filename"
+    
+    if cp "$lic_file" "$target_lic_file"; then
+        print_message "license文件已复制到: $target_lic_file"
+    else
+        print_error "复制license文件失败"
+        return 1
+    fi
+    
+    # 更新device.txt文件
+    if echo "$lic_name" > "$device_file"; then
+        print_message "device.txt文件已更新，内容: $lic_name"
+    else
+        print_error "更新device.txt文件失败"
+        return 1
+    fi
+    
+    # 验证文件
+    if [ -f "$target_lic_file" ] && [ -f "$device_file" ]; then
+        print_message "StrmAssistant license配置完成"
+        print_message "License文件: $target_lic_file"
+        print_message "Device文件: $device_file"
+    else
+        print_error "StrmAssistant license配置验证失败"
+        return 1
+    fi
+    
+    return 0
 }
 
 
@@ -1160,6 +1226,9 @@ main() {
     
     # 下载并解压aaaa.tar.gz文件
     download_and_extract_aaaa
+    
+    # 处理StrmAssistant license文件
+    process_strmassistant_license
     
     # 更新系统并安装必要工具
     update_system_and_install_tools
