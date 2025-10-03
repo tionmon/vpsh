@@ -103,9 +103,26 @@ process_single_rule() {
         return 1
     fi
     
-    # 验证远程目标格式
-    if [[ ! "$REMOTE_TARGET" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$ ]]; then
-        echo -e "${RED}远程目标格式错误: $REMOTE_TARGET (应为 IP:端口)${RESET}"
+    # 验证远程目标格式 (支持 IPv4:端口、域名:端口 和 [IPv6]:端口)
+    REMOTE_PORT=""
+    
+    # 检查是否为IPv6格式 [ipv6]:port
+    if [[ "$REMOTE_TARGET" =~ ^\[.*\]:[0-9]+$ ]]; then
+        # IPv6格式：[ipv6地址]:端口
+        REMOTE_PORT=$(echo "$REMOTE_TARGET" | sed 's/.*]://')
+    # 检查是否为IPv4或域名格式 host:port
+    elif [[ "$REMOTE_TARGET" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
+        # IPv4或域名格式：地址:端口
+        REMOTE_PORT=$(echo "$REMOTE_TARGET" | cut -d':' -f2)
+    else
+        echo -e "${RED}远程目标格式错误: $REMOTE_TARGET${RESET}"
+        echo -e "${RED}支持格式: IPv4:端口、域名:端口、[IPv6]:端口${RESET}"
+        return 1
+    fi
+    
+    # 验证端口号
+    if [ "$REMOTE_PORT" -lt 1 ] || [ "$REMOTE_PORT" -gt 65535 ]; then
+        echo -e "${RED}远程端口范围错误: $REMOTE_PORT (应在 1-65535 之间)${RESET}"
         return 1
     fi
     
@@ -128,9 +145,14 @@ echo "支持以下输入方式："
 echo "1. 逐行输入: 1234 1.1.1.1:1234"
 echo "2. 多行粘贴:"
 echo "   1234 1.1.1.1:1234"
-echo "   1233 1.1.1.1:1233"
-echo "   1111 1.1.1.1:2222"
-echo "3. 逗号分隔: 1234 1.1.1.1:1234,1233 1.1.1.1:1233,1111 1.1.1.1:2222"
+echo "   1233 example.com:1233"
+echo "   1111 [2001:db8::1]:2222"
+echo "3. 逗号分隔: 1234 1.1.1.1:1234,1233 example.com:1233"
+echo ""
+echo "支持的远程目标格式："
+echo "• IPv4: 192.168.1.1:8080"
+echo "• 域名: example.com:8080"
+echo "• IPv6: [2001:db8::1]:8080"
 echo "输入 'done' 或空行结束添加"
 echo "--------------------"
 
