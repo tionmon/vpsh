@@ -159,6 +159,11 @@ done
 if [ -n "$INPUT_BUFFER" ]; then
     # 记录处理前的规则数量
     RULES_BEFORE=$(grep -c '\[\[endpoints\]\]' "$CONFIG_FILE" 2>/dev/null || echo 0)
+    RULES_BEFORE=$(echo "$RULES_BEFORE" | tr -d '[:space:]')
+    # 确保是数字
+    if ! [[ "$RULES_BEFORE" =~ ^[0-9]+$ ]]; then
+        RULES_BEFORE=0
+    fi
     
     # 创建临时文件来存储分割后的规则
     TEMP_RULES=$(mktemp)
@@ -174,6 +179,11 @@ if [ -n "$INPUT_BUFFER" ]; then
     
     # 计算实际添加的规则数量
     RULES_AFTER=$(grep -c '\[\[endpoints\]\]' "$CONFIG_FILE" 2>/dev/null || echo 0)
+    RULES_AFTER=$(echo "$RULES_AFTER" | tr -d '[:space:]')
+    # 确保是数字
+    if ! [[ "$RULES_AFTER" =~ ^[0-9]+$ ]]; then
+        RULES_AFTER=0
+    fi
     ACTUAL_ADDED=$((RULES_AFTER - RULES_BEFORE))
     
     if [ "$ACTUAL_ADDED" -gt 0 ]; then
