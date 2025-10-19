@@ -206,6 +206,222 @@ get_ip_addresses() {
     echo "${ipv4}|${ipv6}"
 }
 
+# 显示网卡流量信息
+show_network_interfaces() {
+    print_info "当前网卡流量统计（接收/发送字节数）："
+    echo ""
+    echo "网卡名称          接收流量(MB)    发送流量(MB)    总流量(MB)"
+    echo "------------------------------------------------------------"
+
+    # 临时文件存储网卡信息
+    local temp_file=$(mktemp)
+
+    # 获取所有网卡及其流量信息
+    for interface in $(ls /sys/class/net/ 2>/dev/null | grep -v "^lo$"); do
+        if [[ -f "/sys/class/net/$interface/statistics/rx_bytes" ]]; then
+            rx_bytes=$(cat /sys/class/net/$interface/statistics/rx_bytes 2>/dev/null || echo 0)
+            tx_bytes=$(cat /sys/class/net/$interface/statistics/tx_bytes 2>/dev/null || echo 0)
+
+            # 转换为 MB (使用纯 bash 算术)
+            rx_mb=$((rx_bytes / 1024 / 1024))
+            tx_mb=$((tx_bytes / 1024 / 1024))
+            total_mb=$((rx_mb + tx_mb))
+
+            # 保存到临时文件，按总流量排序
+            echo "$total_mb $interface $rx_mb $tx_mb" >> "$temp_file"
+        fi
+    done
+
+    # 按总流量排序并显示
+    if [[ -f "$temp_file" ]]; then
+        sort -rn "$temp_file" | while read total interface rx tx; do
+            printf "%-15s %12s %15s %15s\n" "$interface" "$rx" "$tx" "$total"
+        done
+        rm -f "$temp_file"
+    fi
+
+    echo ""
+}
+
+# 检查 NAT 是否已配置
+check_nat_configured() {
+    # 检查 IP 转发是否开启
+    local ipv4_forward=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)
+    local ipv6_forward=$(cat /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null || echo 0)
+
+    # 检查是否有 MASQUERADE 规则
+    local has_nat=$(iptables -t nat -L POSTROUTING -n 2>/dev/null | grep -c MASQUERADE || echo 0)
+
+    if [[ "$ipv4_forward" == "1" ]] && [[ "$ipv6_forward" == "1" ]] && [[ "$has_nat" -gt 0 ]]; then
+        return 0  # 已配置
+    else
+        return 1  # 未配置
+    fi
+}
+
+# 配置 IP 转发与 NAT
+configure_nat() {
+    echo ""
+    echo "=========================================="
+    print_info "透明网关配置"
+    echo "=========================================="
+    echo ""
+
+    # 显示网卡流量统计
+    show_network_interfaces
+
+    print_info "请输入网卡名称（通常选择总流量最大的网卡）："
+    read -r interface_name
+
+    # 检查输入是否为空
+    while [[ -z "$interface_name" ]]; do
+        print_warning "网卡名称不能为空！"
+        read -r interface_name
+    done
+
+    # 检查网卡是否存在
+    if [[ ! -d "/sys/class/net/$interface_name" ]]; then
+        print_error "网卡 $interface_name 不存在！"
+        return 1
+    fi
+
+    print_info "开始配置 IP 转发与 NAT..."
+
+    # 1. 开启 IPv4 转发
+    print_info "开启 IPv4 转发..."
+    sysctl -w net.ipv4.ip_forward=1 &>/dev/null
+    print_info "IPv4 转发已开启"
+
+    # 2. 开启 IPv6 转发
+    print_info "开启 IPv6 转发..."
+    sysctl -w net.ipv6.conf.all.forwarding=1 &>/dev/null
+    print_info "IPv6 转发已开启"
+
+    # 3. 配置 NAT 规则（检查是否已存在）
+    print_info "配置 NAT 规则..."
+    if iptables -t nat -C POSTROUTING -o "$interface_name" -j MASQUERADE 2>/dev/null; then
+        print_info "NAT 规则已存在"
+    else
+        iptables -t nat -A POSTROUTING -o "$interface_name" -j MASQUERADE
+        print_info "NAT 规则添加成功"
+    fi
+
+    # 4. 固化配置
+    print_info "固化配置（重启后仍然有效）..."
+
+    # 持久化 IP 转发到 /etc/sysctl.conf
+    if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+        echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    fi
+    if ! grep -q "^net.ipv6.conf.all.forwarding=1" /etc/sysctl.conf 2>/dev/null; then
+        echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    fi
+
+    # 保存网卡名到配置文件，用于卸载
+    echo "$interface_name" > /home/docker/mihomo/.nat_interface 2>/dev/null
+
+    # 保存 iptables 规则
+    mkdir -p /etc/iptables 2>/dev/null
+    if command -v netfilter-persistent &> /dev/null; then
+        netfilter-persistent save 2>/dev/null && print_info "iptables 规则已保存 (netfilter-persistent)"
+    else
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null && print_info "iptables 规则已保存到 /etc/iptables/rules.v4"
+    fi
+
+    echo ""
+    print_info "IP 转发与 NAT 配置完成！"
+    echo ""
+    echo "配置信息："
+    echo "  网卡: $interface_name"
+    echo "  IPv4 转发: 已开启"
+    echo "  IPv6 转发: 已开启"
+    echo "  NAT 规则: 已配置"
+    echo "  配置已固化: 重启后仍然有效"
+    echo ""
+}
+
+# 卸载 NAT 配置
+uninstall_nat() {
+    print_info "卸载 IP 转发与 NAT 配置..."
+
+    # 读取之前保存的网卡名
+    if [[ -f /home/docker/mihomo/.nat_interface ]]; then
+        local interface_name=$(cat /home/docker/mihomo/.nat_interface)
+        # 删除 NAT 规则
+        if iptables -t nat -C POSTROUTING -o "$interface_name" -j MASQUERADE 2>/dev/null; then
+            iptables -t nat -D POSTROUTING -o "$interface_name" -j MASQUERADE 2>/dev/null
+            print_info "已删除 NAT 规则"
+        fi
+    else
+        # 尝试删除所有 MASQUERADE 规则
+        while iptables -t nat -D POSTROUTING -j MASQUERADE 2>/dev/null; do
+            :
+        done
+        print_info "已尝试删除所有 MASQUERADE 规则"
+    fi
+
+    # 删除 sysctl.conf 中的配置
+    if [[ -f /etc/sysctl.conf ]]; then
+        sed -i '/^net.ipv4.ip_forward=1/d' /etc/sysctl.conf 2>/dev/null
+        sed -i '/^net.ipv6.conf.all.forwarding=1/d' /etc/sysctl.conf 2>/dev/null
+        print_info "已删除 sysctl.conf 中的配置"
+    fi
+
+    # 关闭 IP 转发
+    sysctl -w net.ipv4.ip_forward=0 &>/dev/null
+    sysctl -w net.ipv6.conf.all.forwarding=0 &>/dev/null
+    print_info "已关闭 IP 转发"
+
+    # 保存 iptables 规则
+    if command -v netfilter-persistent &> /dev/null; then
+        netfilter-persistent save 2>/dev/null
+    else
+        mkdir -p /etc/iptables 2>/dev/null
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null
+    fi
+
+    print_info "NAT 配置卸载完成"
+}
+
+# 完整卸载
+uninstall_mihomo() {
+    echo ""
+    echo "=========================================="
+    print_warning "卸载 Mihomo"
+    echo "=========================================="
+    echo ""
+
+    read -p "确认要卸载 Mihomo 吗？这将删除所有配置文件！(y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_info "取消卸载"
+        return 0
+    fi
+
+    # 停止并删除容器
+    if [[ -d /home/docker/mihomo ]]; then
+        print_info "停止并删除 Docker 容器..."
+        cd /home/docker/mihomo 2>/dev/null && docker compose down 2>/dev/null
+        print_info "Docker 容器已停止"
+    fi
+
+    # 卸载 NAT 配置
+    if check_nat_configured; then
+        uninstall_nat
+    fi
+
+    # 删除文件夹
+    if [[ -d /home/docker/mihomo ]]; then
+        print_info "删除 /home/docker/mihomo 文件夹..."
+        rm -rf /home/docker/mihomo
+        print_info "文件夹已删除"
+    fi
+
+    echo ""
+    print_info "Mihomo 卸载完成！"
+    echo ""
+}
+
 # 显示完成信息
 show_completion_message() {
     local ip_info=$(get_ip_addresses)
@@ -258,31 +474,93 @@ main() {
     echo "=========================================="
     echo ""
 
+    # 检查 root 权限
+    check_root
+
+    # 检查是否已安装
+    if [[ -d /home/docker/mihomo ]]; then
+        print_warning "检测到 Mihomo 已安装！"
+        echo ""
+        echo "请选择操作："
+        echo "  1) 卸载 Mihomo"
+        echo "  2) 配置透明网关（IP 转发与 NAT）"
+        echo "  3) 退出"
+        echo ""
+        read -p "请输入选项 (1-3): " -n 1 -r choice
+        echo ""
+        echo ""
+
+        case $choice in
+            1)
+                uninstall_mihomo
+                exit 0
+                ;;
+            2)
+                if check_nat_configured; then
+                    print_info "透明网关已配置"
+                    echo ""
+                    read -p "是否重新配置？(y/n): " -n 1 -r
+                    echo
+                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                        print_info "退出"
+                        exit 0
+                    fi
+                    # 先卸载旧配置
+                    uninstall_nat
+                fi
+                # 配置透明网关
+                configure_nat
+                exit 0
+                ;;
+            3)
+                print_info "退出"
+                exit 0
+                ;;
+            *)
+                print_error "无效的选项"
+                exit 1
+                ;;
+        esac
+    fi
+
+    # 以下是全新安装流程
+    echo ""
+
     # 1. 先获取并验证订阅链接
     get_and_verify_subscription
     echo ""
 
-    # 2. 检查 root 权限
-    check_root
-
-    # 3. 检查 Docker 是否安装
+    # 2. 检查 Docker 是否安装
     check_docker
     echo ""
 
-    # 4. 创建目录结构
+    # 3. 创建目录结构
     create_directories
 
-    # 5. 下载配置文件
+    # 4. 下载配置文件
     download_files
 
-    # 6. 配置订阅链接
+    # 5. 配置订阅链接
     configure_subscription
 
-    # 7. 启动服务
+    # 6. 启动服务
     start_docker_compose
 
-    # 8. 显示完成信息
+    # 7. 显示完成信息
     show_completion_message
+
+    # 8. 询问是否配置透明网关
+    echo ""
+    read -p "是否需要开启 IP 转发与 NAT（实现透明网关功能）？(y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        configure_nat
+    else
+        print_info "跳过透明网关配置"
+    fi
+
+    echo ""
+    print_info "全部完成！"
 }
 
 # 运行主函数
