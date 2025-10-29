@@ -1,0 +1,71 @@
+services:
+  ###########################################################################
+
+  #qbittorrent
+
+  #services:
+  qbittorrent:
+    image: linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+      - UMASK_SET=022
+      - WEBUI_PORT=8082 # Web UI端口
+      - TORRENTING_PORT=6881 # 监听端口，默认6881，修改为20000-65535区间值
+    volumes:
+      - ./qbittorrent/config:/config # 冒号左侧修改参照上文
+      - ./media:/downloads # 同上
+    ports:
+      - 8082:8082 # 同上面Web UI端口一致
+      - 6881:6881
+      - 6881:6881/udp
+    restart: unless-stopped
+
+  ###########################################################################
+
+  #clouddrive
+
+  #services:
+  clouddrive:
+    image: cloudnas/clouddrive2:0.8.14 #拉取CD2镜像
+    container_name: clouddrive #容器命名
+    restart: always #重启规则
+    ports:
+      - "19798:19798"
+    environment:
+      - CLOUDDRIVE_HOME=/Config
+    volumes:
+      - ./clouddrive/config:/Config #映射CD2配置路径
+      - ./media:/media #映射媒体文件路径（strm）
+    network_mode: "host"
+    pid: "host"
+    privileged: true
+    devices:
+      - /dev/fuse:/dev/fuse
+
+  ###########################################################################
+
+  #filebrowser
+
+  #services:
+  filebrowser:
+    container_name: filebrowser
+    image: filebrowser/filebrowser:latest
+    restart: always
+    volumes:
+      - ./media:/srv
+      - ./filebrowser/config/config.json:/etc/config.json
+      - ./filebrowser/db/database.db:/etc/database.db
+    environment:
+      - PGID=1000
+      - PUID=1000
+      - TZ=Aisa/Shanghai
+    ports:
+      - "7070:80"
+###########################################################################
+
+#filebrowser
+
+#services:
