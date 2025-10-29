@@ -29,7 +29,7 @@ services:
 
   #services:
   clouddrive:
-    image: cloudnas/clouddrive2:0.8.14 #拉取CD2镜像
+    image: cloudnas/clouddrive2:latest #拉取CD2镜像
     container_name: clouddrive #容器命名
     restart: always #重启规则
     ports:
