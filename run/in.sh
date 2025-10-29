@@ -367,27 +367,27 @@ get_system_params() {
     case "$system_choice" in
         1)
             SYSTEM_FLAG="-d 11"
-            MIRROR_URL="https://mirrors.tuna.tsinghua.edu.cn/debian/"
+            MIRROR_URL="http://mirrors.huaweicloud.com/debian/"
             SYSTEM_NAME="Debian 11 (bullseye)"
             ;;
         2)
             SYSTEM_FLAG="-d 12"
-            MIRROR_URL="https://mirrors.tuna.tsinghua.edu.cn/debian/"
+            MIRROR_URL="http://mirrors.huaweicloud.com/debian/"
             SYSTEM_NAME="Debian 12 (bookworm)"
             ;;
         3)
             SYSTEM_FLAG="-d 13"
-            MIRROR_URL="https://mirrors.tuna.tsinghua.edu.cn/debian/"
+            MIRROR_URL="http://mirrors.huaweicloud.com/debian/"
             SYSTEM_NAME="Debian 13 (trixie)"
             ;;
         4)
             SYSTEM_FLAG="-u 20.04"
-            MIRROR_URL="https://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+            MIRROR_URL="http://mirrors.huaweicloud.com/ubuntu/"
             SYSTEM_NAME="Ubuntu 20.04 LTS (focal)"
             ;;
         5)
             SYSTEM_FLAG="-u 22.04"
-            MIRROR_URL="https://mirrors.tuna.tsinghua.edu.cn/ubuntu/"
+            MIRROR_URL="http://mirrors.huaweicloud.com/ubuntu/"
             SYSTEM_NAME="Ubuntu 22.04 LTS (jammy)"
             ;;
         *)
