@@ -183,6 +183,37 @@ EOF
     log_info "APT 源配置完成"
 }
 
+# 检查并临时安装 CA 证书
+check_and_install_ca_certificates() {
+    log_info "检查 CA 证书..."
+
+    # 检查是否存在 ca-certificates 包
+    if ! dpkg -l | grep -q "^ii.*ca-certificates"; then
+        log_warn "检测到系统缺少 CA 证书，正在临时安装..."
+
+        # 临时将 HTTPS 源改为 HTTP
+        if [ -f /etc/apt/sources.list ]; then
+            cp /etc/apt/sources.list /etc/apt/sources.list.backup.ca
+            sed -i 's|https://|http://|g' /etc/apt/sources.list
+            log_info "已临时将源改为 HTTP"
+        fi
+
+        # 更新并安装 ca-certificates
+        apt update
+        apt install -y ca-certificates
+
+        # 恢复 HTTPS 源（如果之前有备份）
+        if [ -f /etc/apt/sources.list.backup.ca ]; then
+            mv /etc/apt/sources.list.backup.ca /etc/apt/sources.list
+            log_info "已恢复 HTTPS 源"
+        fi
+
+        log_info "CA 证书安装完成"
+    else
+        log_info "CA 证书已存在，无需安装"
+    fi
+}
+
 # 安装基础软件包
 install_basic_packages() {
     log_info "更新软件包索引..."
@@ -318,11 +349,34 @@ check_docker_installed() {
     fi
 }
 
+# 询问是否安装 Docker
+ask_install_docker() {
+    echo ""
+    echo -e "${YELLOW}================================================${NC}"
+    echo -e "${YELLOW}检测到系统未安装 Docker${NC}"
+    echo -e "${YELLOW}是否需要安装 Docker？${NC}"
+    echo -e "${YELLOW}输入 y 或 yes 继续安装，输入 n 或 no 跳过安装${NC}"
+    echo -e "${YELLOW}================================================${NC}"
+    read -p "请选择 [y/n]: " choice
+
+    case "$choice" in
+        y|Y|yes|YES)
+            return 0
+            ;;
+        n|N|no|NO)
+            return 1
+            ;;
+        *)
+            log_warn "无效的输入，默认不安装 Docker"
+            return 1
+            ;;
+    esac
+}
+
 # 询问是否配置 Docker 镜像加速
 ask_configure_docker_mirror() {
     echo ""
     echo -e "${YELLOW}================================================${NC}"
-    echo -e "${YELLOW}检测到系统已安装 Docker${NC}"
     echo -e "${YELLOW}是否需要配置 Docker 镜像加速？${NC}"
     echo -e "${YELLOW}输入 y 或 yes 继续配置，输入 n 或 no 跳过配置${NC}"
     echo -e "${YELLOW}================================================${NC}"
@@ -342,221 +396,6 @@ ask_configure_docker_mirror() {
     esac
 }
 
-# 显示系统选择菜单
-show_system_menu() {
-    echo ""
-    echo -e "${BLUE}================================================${NC}"
-    echo -e "${BLUE}       系统重装脚本 - 选择目标系统${NC}"
-    echo -e "${BLUE}================================================${NC}"
-    echo ""
-    echo "请选择要安装的系统："
-    echo ""
-    echo "  1. Debian 11 (bullseye)"
-    echo "  2. Debian 12 (bookworm)"
-    echo "  3. Debian 13 (trixie)"
-    echo "  4. Ubuntu 20.04 LTS (focal)"
-    echo "  5. Ubuntu 22.04 LTS (jammy)"
-    echo ""
-    echo -e "${YELLOW}================================================${NC}"
-    read -p "请输入选项 [1-5]: " system_choice
-    echo ""
-}
-
-# 获取系统参数
-get_system_params() {
-    case "$system_choice" in
-        1)
-            SYSTEM_FLAG="-d 11"
-            MIRROR_URL="http://mirrors.huaweicloud.com/debian/"
-            SYSTEM_NAME="Debian 11 (bullseye)"
-            ;;
-        2)
-            SYSTEM_FLAG="-d 12"
-            MIRROR_URL="http://mirrors.huaweicloud.com/debian/"
-            SYSTEM_NAME="Debian 12 (bookworm)"
-            ;;
-        3)
-            SYSTEM_FLAG="-d 13"
-            MIRROR_URL="http://mirrors.huaweicloud.com/debian/"
-            SYSTEM_NAME="Debian 13 (trixie)"
-            ;;
-        4)
-            SYSTEM_FLAG="-u 20.04"
-            MIRROR_URL="http://mirrors.huaweicloud.com/ubuntu/"
-            SYSTEM_NAME="Ubuntu 20.04 LTS (focal)"
-            ;;
-        5)
-            SYSTEM_FLAG="-u 22.04"
-            MIRROR_URL="http://mirrors.huaweicloud.com/ubuntu/"
-            SYSTEM_NAME="Ubuntu 22.04 LTS (jammy)"
-            ;;
-        *)
-            log_error "无效的选项，请输入 1-5"
-            exit 1
-            ;;
-    esac
-}
-
-# 获取用户输入的密码
-get_password() {
-    echo ""
-    echo -e "${YELLOW}================================================${NC}"
-    echo -e "${YELLOW}设置 Root 密码${NC}"
-    echo -e "${YELLOW}================================================${NC}"
-    while true; do
-        read -sp "请输入 root 密码: " password
-        echo ""
-        if [ -z "$password" ]; then
-            log_error "密码不能为空，请重新输入"
-            continue
-        fi
-
-        read -sp "请再次输入密码: " password_confirm
-        echo ""
-
-        if [ "$password" != "$password_confirm" ]; then
-            log_error "两次密码输入不一致，请重新输入"
-            continue
-        fi
-
-        break
-    done
-    echo ""
-}
-
-# 获取用户输入的 SSH 端口
-get_ssh_port() {
-    echo ""
-    echo -e "${YELLOW}================================================${NC}"
-    echo -e "${YELLOW}设置 SSH 端口${NC}"
-    echo -e "${YELLOW}================================================${NC}"
-    while true; do
-        read -p "请输入 SSH 端口 (默认: 22): " ssh_port
-
-        # 如果为空，使用默认端口 22
-        if [ -z "$ssh_port" ]; then
-            ssh_port=22
-            break
-        fi
-
-        # 检查是否为数字
-        if ! [[ "$ssh_port" =~ ^[0-9]+$ ]]; then
-            log_error "端口必须是数字，请重新输入"
-            continue
-        fi
-
-        # 检查端口范围
-        if [ "$ssh_port" -lt 1 ] || [ "$ssh_port" -gt 65535 ]; then
-            log_error "端口范围必须在 1-65535 之间，请重新输入"
-            continue
-        fi
-
-        break
-    done
-    echo ""
-}
-
-# 获取服务器 IP 地址
-get_server_ip() {
-    log_info "正在获取服务器 IP 地址..."
-
-    # 临时禁用错误退出，防止 curl 失败导致脚本退出
-    set +e
-
-    # 尝试获取 IPv4 地址
-    SERVER_IP=$(curl -s --max-time 5 4.ipw.cn 2>/dev/null)
-
-    # 如果 IPv4 获取失败，尝试 IPv6
-    if [ -z "$SERVER_IP" ]; then
-        SERVER_IP=$(curl -s --max-time 5 6.ipw.cn 2>/dev/null)
-    fi
-
-    # 如果都失败，使用备用方法
-    if [ -z "$SERVER_IP" ]; then
-        SERVER_IP=$(curl -s --max-time 5 ip.sb 2>/dev/null)
-    fi
-
-    # 恢复错误退出设置
-    set -e
-
-    if [ -z "$SERVER_IP" ]; then
-        log_warn "无法自动获取服务器 IP，请手动记录"
-        SERVER_IP="<您的服务器IP>"
-    else
-        log_info "服务器 IP: ${SERVER_IP}"
-    fi
-}
-
-# 确认系统重装信息
-confirm_system_reinstall() {
-    # 生成检测命令
-    MONITOR_CMD="apt install netcat-openbsd -y && while true; do nc -zv ${SERVER_IP} ${ssh_port}; sleep 5; done"
-
-    echo ""
-    echo -e "${GREEN}================================================${NC}"
-    echo -e "${GREEN}       安装信息确认${NC}"
-    echo -e "${GREEN}================================================${NC}"
-    echo ""
-    echo "  目标系统: ${SYSTEM_NAME}"
-    echo "  服务器 IP: ${SERVER_IP}"
-    echo "  SSH 端口: ${ssh_port}"
-    echo "  镜像源: ${MIRROR_URL}"
-    echo ""
-    echo -e "${BLUE}重装完成检测命令:${NC}"
-    echo -e "${YELLOW}${MONITOR_CMD}${NC}"
-    echo ""
-    echo -e "${YELLOW}================================================${NC}"
-    read -p "确认安装？(输入 yes 继续): " confirm
-    echo ""
-
-    if [ "$confirm" != "yes" ]; then
-        log_warn "已取消安装"
-        exit 0
-    fi
-}
-
-# 执行系统重装
-execute_system_reinstall() {
-    log_info "开始执行系统重装..."
-    echo ""
-
-    # 构建完整命令
-    INSTALL_CMD="bash <(wget --no-check-certificate -qO- 'https://gh-proxy.com/https://raw.githubusercontent.com/MoeClub/Note/master/InstallNET.sh') ${SYSTEM_FLAG} -v 64 -p \"${password}\" -port \"${ssh_port}\" --mirror '${MIRROR_URL}'"
-
-    log_info "执行命令: ${INSTALL_CMD}"
-    echo ""
-
-    # 临时禁用错误退出，因为系统重装会断开连接
-    set +e
-
-    # 执行安装命令
-    eval "$INSTALL_CMD"
-
-    # 不管返回值如何，都显示信息
-    echo ""
-    log_info "================================"
-    log_info "系统重装命令已执行！"
-    log_info "系统将在几分钟后重启并开始安装"
-    log_info "================================"
-    echo ""
-    log_info "安装信息:"
-    log_info "  系统: ${SYSTEM_NAME}"
-    log_info "  服务器 IP: ${SERVER_IP}"
-    log_info "  SSH 端口: ${ssh_port}"
-    log_info "  Root 密码: (您设置的密码)"
-    echo ""
-    echo -e "${BLUE}================================================================${NC}"
-    echo -e "${BLUE}请在另一台机器上执行以下命令，监控重装进度:${NC}"
-    echo -e "${BLUE}================================================================${NC}"
-    echo ""
-    echo -e "${YELLOW}${MONITOR_CMD}${NC}"
-    echo ""
-    echo -e "${BLUE}================================================================${NC}"
-    echo -e "${GREEN}当看到 'Connection to ${SERVER_IP} ${ssh_port} port [tcp/*] succeeded!' 时${NC}"
-    echo -e "${GREEN}表示系统重装完成，可以使用 SSH 登录了${NC}"
-    echo -e "${BLUE}================================================================${NC}"
-    echo ""
-}
 
 # 询问是否安装 v2raya
 ask_install_v2raya() {
@@ -581,9 +420,12 @@ ask_install_v2raya() {
     esac
 }
 
-# 国内优化（仅配置源和镜像加速）
+# 国内优化（仅配置源）
 optimize_for_china() {
     log_info "开始国内优化..."
+
+    # 检查并安装 CA 证书
+    check_and_install_ca_certificates
 
     # 配置 APT 源
     configure_apt_sources
@@ -591,8 +433,38 @@ optimize_for_china() {
     # 安装基础软件包
     install_basic_packages
 
+    echo ""
+    log_info "================================"
+    log_info "国内优化完成！"
+    log_info "================================"
+    echo ""
+}
+
+# 主函数
+main() {
+    echo ""
+    echo -e "${GREEN}================================================${NC}"
+    echo -e "${GREEN}       系统优化脚本${NC}"
+    echo -e "${GREEN}================================================${NC}"
+    echo ""
+
+    # 检查 root 权限
+    check_root
+
+    # 检测系统版本
+    detect_system
+
+    # 直接执行国内优化
+    optimize_for_china
+
+    # Docker 安装标志
+    DOCKER_INSTALLED=false
+
     # 检查 Docker 是否已安装
     if check_docker_installed; then
+        log_info "检测到系统已安装 Docker"
+        DOCKER_INSTALLED=true
+
         # Docker 已安装，询问是否配置镜像加速
         if ask_configure_docker_mirror; then
             configure_docker_registry
@@ -609,102 +481,44 @@ optimize_for_china() {
             log_info "已跳过 Docker 镜像加速配置"
         fi
     else
-        log_warn "系统未安装 Docker，跳过 Docker 镜像加速配置"
-    fi
+        # Docker 未安装，询问是否安装
+        if ask_install_docker; then
+            # 询问是否配置镜像加速
+            CONFIGURE_MIRROR=false
+            if ask_configure_docker_mirror; then
+                CONFIGURE_MIRROR=true
+            fi
 
-    echo ""
-    log_info "================================"
-    log_info "国内优化完成！"
-    log_info "================================"
-    echo ""
-}
+            # 配置镜像加速（如果选择了）
+            if [ "$CONFIGURE_MIRROR" = true ]; then
+                configure_docker_registry
+            fi
 
-# 国内重装（完整系统重装流程）
-reinstall_for_china() {
-    log_info "开始国内重装..."
-    echo ""
+            # 安装 Docker
+            install_docker
 
-    # 显示系统选择菜单
-    show_system_menu
+            # 启用 Docker 开机自启
+            enable_docker_autostart
 
-    # 获取系统参数
-    get_system_params
+            DOCKER_INSTALLED=true
 
-    # 获取密码
-    get_password
-
-    # 获取 SSH 端口
-    get_ssh_port
-
-    # 获取服务器 IP 地址
-    get_server_ip
-
-    # 确认系统重装信息
-    confirm_system_reinstall
-
-    # 执行系统重装
-    execute_system_reinstall
-
-    # 系统重装后脚本会断开，直接退出
-    exit 0
-}
-
-# 显示菜单
-show_menu() {
-    echo ""
-    echo -e "${GREEN}================================================${NC}"
-    echo -e "${GREEN}       Docker 自动配置/安装脚本${NC}"
-    echo -e "${GREEN}================================================${NC}"
-    echo ""
-    echo "请选择操作："
-    echo "  1. 国内优化 "
-    echo "  2. 国内重装 "
-    echo ""
-    echo -e "${YELLOW}================================================${NC}"
-    read -p "请输入选项 [1-2]: " menu_choice
-    echo ""
-}
-
-# 主函数
-main() {
-    # 检查 root 权限
-    check_root
-
-    # 检测系统版本
-    detect_system
-
-    # 显示菜单并处理选择
-    show_menu
-
-    case "$menu_choice" in
-        1)
-            optimize_for_china
-            ;;
-        2)
-            reinstall_for_china
-            ;;
-        *)
-            log_error "无效的选项，请输入 1 或 2"
-            exit 1
-            ;;
-    esac
-
-    # 在执行完主要操作后，询问是否安装 v2raya
-    INSTALL_V2RAYA=false
-    if ask_install_v2raya; then
-        INSTALL_V2RAYA=true
-    fi
-
-    # 如果用户选择安装 v2raya，则继续安装
-    if [ "$INSTALL_V2RAYA" = true ]; then
-        # 确保 Docker 已安装
-        if ! check_docker_installed; then
-            log_error "Docker 未安装，无法安装 v2raya"
-            exit 1
+            if [ "$CONFIGURE_MIRROR" = true ]; then
+                log_info "Docker 安装完成，镜像加速配置已生效"
+            else
+                log_info "Docker 安装完成"
+            fi
+        else
+            log_info "已跳过 Docker 安装"
         fi
-        install_v2raya
-    else
-        log_info "已跳过 v2raya 安装"
+    fi
+
+    # 如果 Docker 已安装（无论是之前就有还是刚装的），询问是否安装 v2raya
+    if [ "$DOCKER_INSTALLED" = true ]; then
+        if ask_install_v2raya; then
+            install_v2raya
+        else
+            log_info "已跳过 v2raya 安装"
+        fi
     fi
 
     echo ""
