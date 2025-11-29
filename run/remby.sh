@@ -5,27 +5,21 @@ if ! command -v caddy &> /dev/null
 then
     # 如果没有安装，执行安装步骤
     echo "Caddy 未安装，正在安装必要的软件包..."
-    sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+    sudo apt update -y
+    sudo apt full-upgrade -y
+    sudo apt install -y curl wget sudo unzip
 
-    # 下载并导入 Caddy 的 GPG 密钥
-    echo "正在导入 Caddy 的 GPG 密钥..."
+    echo "[2/5] 安装 Caddy 所需的依赖..."
+    sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https ca-certificates gnupg
+
+    echo "[3/5] 添加 Caddy stable 版 GPG 密钥..."
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 
-    # 添加 Caddy 的软件源
-    echo "正在添加 Caddy 的软件源..."
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+    echo "[4/5] 添加 Caddy stable 版 apt 源..."
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null
 
-    # 修改文件权限，允许其他用户读取
-    echo "正在修改文件权限..."
-    chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-    chmod o+r /etc/apt/sources.list.d/caddy-stable.list
-
-    # 更新 apt 包索引
-    echo "正在更新 apt 包索引..."
+    echo "[5/5] 再次更新软件包列表并安装 Caddy..."
     sudo apt update
-
-    # 安装 Caddy
-    echo "正在安装 Caddy..."
     sudo apt install -y caddy
     systemctl enable caddy
 fi
@@ -42,8 +36,8 @@ fi
 read -p "输入反代地址 ip:port: " redomain
 
 # 构建新的反代配置块
-new_config="$domain { 
-    reverse_proxy $redomain { 
+new_config="$domain {
+    reverse_proxy $redomain {
         header_up Host {upstream_hostport}
     }
 
