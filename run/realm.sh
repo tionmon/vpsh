@@ -2,7 +2,7 @@
 CONFIG_FILE="/etc/realm/config.toml"
 REALM_BIN="/usr/local/bin/realm"
 SERVICE_FILE="/etc/systemd/system/realm.service"
-REALM_URL="https://github.com/zhboner/realm/releases/download/v2.9.2/realm-x86_64-unknown-linux-musl.tar.gz"
+REALM_URL="https://gh-proxy.org/github.com/zhboner/realm/releases/download/v2.9.2/realm-x86_64-unknown-linux-musl.tar.gz"
 TMP_DIR="/tmp/realm-install"
 
 GREEN="\e[32m"
@@ -20,28 +20,28 @@ fi
 parse_port_range() {
     local port_input="$1"
     local ports=()
-    
+
     # 检查是否为端口范围格式 (如: 1000-1100)
     if [[ "$port_input" =~ ^([0-9]+)-([0-9]+)$ ]]; then
         local start_port="${BASH_REMATCH[1]}"
         local end_port="${BASH_REMATCH[2]}"
-        
+
         # 验证端口范围
         if [ "$start_port" -lt 1 ] || [ "$start_port" -gt 65535 ] || [ "$end_port" -lt 1 ] || [ "$end_port" -gt 65535 ]; then
             echo -e "${RED}端口范围错误: $port_input (应在 1-65535 之间)${RESET}"
             return 1
         fi
-        
+
         if [ "$start_port" -gt "$end_port" ]; then
             echo -e "${RED}端口范围错误: $port_input (起始端口不能大于结束端口)${RESET}"
             return 1
         fi
-        
+
         # 生成端口列表
         for ((port=start_port; port<=end_port; port++)); do
             ports+=("$port")
         done
-        
+
         echo "${ports[@]}"
         return 0
     # 检查是否为单个端口
@@ -63,7 +63,7 @@ parse_remote_target() {
     local remote_input="$1"
     local host=""
     local port_input=""
-    
+
     # 检查是否为IPv6格式 [ipv6]:port
     if [[ "$remote_input" =~ ^\[.*\]:([0-9-]+)$ ]]; then
         # IPv6格式：[ipv6地址]:端口
@@ -80,14 +80,14 @@ parse_remote_target() {
         echo -e "${RED}端口支持范围格式: 1.1.1.1:1000-1100${RESET}"
         return 1
     fi
-    
+
     # 解析端口范围
     local ports_output
     ports_output=$(parse_port_range "$port_input")
     if [ $? -ne 0 ]; then
         return 1
     fi
-    
+
     # 返回格式: "host|port1 port2 port3 ..."
     echo "$host|$ports_output"
     return 0
@@ -96,12 +96,12 @@ parse_remote_target() {
 # 检查端口是否已被占用
 check_port_occupied() {
     local port="$1"
-    
+
     # 检查配置文件中是否已存在该端口
     if grep -q "listen = \"0.0.0.0:$port\"" "$CONFIG_FILE" 2>/dev/null; then
         return 0  # 端口已被占用
     fi
-    
+
     # 检查系统中是否有进程在使用该端口
     if command -v netstat >/dev/null 2>&1; then
         if netstat -tuln 2>/dev/null | grep -q ":$port "; then
@@ -112,7 +112,7 @@ check_port_occupied() {
             return 0  # 端口已被占用
         fi
     fi
-    
+
     return 1  # 端口未被占用
 }
 
@@ -178,53 +178,53 @@ echo -e "${GREEN}已添加规则并重启 Realm。${RESET}"
 process_single_rule() {
     local rule="$1"
     local LOCAL_PORT_INPUT REMOTE_TARGET_INPUT
-    
+
     # 去除前后空格
     rule=$(echo "$rule" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    
+
     # 跳过空行
     if [ -z "$rule" ]; then
         return 1
     fi
-    
+
     # 解析输入
     LOCAL_PORT_INPUT=$(echo "$rule" | awk '{print $1}')
     REMOTE_TARGET_INPUT=$(echo "$rule" | awk '{print $2}')
-    
+
     # 验证输入格式
     if [ -z "$LOCAL_PORT_INPUT" ] || [ -z "$REMOTE_TARGET_INPUT" ]; then
         echo -e "${RED}格式错误: $rule (应为: 本机端口 远程IP:端口)${RESET}"
         return 1
     fi
-    
+
     # 解析本地端口范围
     local local_ports_output
     local_ports_output=$(parse_port_range "$LOCAL_PORT_INPUT")
     if [ $? -ne 0 ]; then
         return 1
     fi
-    
+
     # 解析远程目标
     local remote_output
     remote_output=$(parse_remote_target "$REMOTE_TARGET_INPUT")
     if [ $? -ne 0 ]; then
         return 1
     fi
-    
+
     # 分离主机和端口
     local remote_host=$(echo "$remote_output" | cut -d'|' -f1)
     local remote_ports_output=$(echo "$remote_output" | cut -d'|' -f2)
-    
+
     # 将端口输出转换为数组
     local local_ports=($local_ports_output)
     local remote_ports=($remote_ports_output)
-    
+
     # 检查端口数量是否匹配
     if [ ${#local_ports[@]} -ne ${#remote_ports[@]} ]; then
         echo -e "${RED}端口数量不匹配: 本地端口 ${#local_ports[@]} 个，远程端口 ${#remote_ports[@]} 个${RESET}"
         return 1
     fi
-    
+
     # 检查端口是否已被占用
     local occupied_ports=()
     for local_port in "${local_ports[@]}"; do
@@ -232,21 +232,21 @@ process_single_rule() {
             occupied_ports+=("$local_port")
         fi
     done
-    
+
     if [ ${#occupied_ports[@]} -gt 0 ]; then
         echo -e "${RED}以下端口已被占用: ${occupied_ports[*]}${RESET}"
         echo -e "${RED}请选择其他端口或先删除现有规则${RESET}"
         return 1
     fi
-    
+
     local rules_added=0
-    
+
     # 为每个端口对添加规则
     for i in "${!local_ports[@]}"; do
         local local_port="${local_ports[$i]}"
         local remote_port="${remote_ports[$i]}"
         local remote_target="$remote_host:$remote_port"
-        
+
         # 添加规则到配置文件
         cat >> "$CONFIG_FILE" <<EOF
 
@@ -257,13 +257,13 @@ type = "tcp+udp"
 EOF
         rules_added=$((rules_added + 1))
     done
-    
+
     if [ ${#local_ports[@]} -eq 1 ]; then
         echo -e "${GREEN}已添加规则: $LOCAL_PORT_INPUT -> $REMOTE_TARGET_INPUT${RESET}"
     else
         echo -e "${GREEN}已添加规则: $LOCAL_PORT_INPUT -> $REMOTE_TARGET_INPUT (共 ${#local_ports[@]} 个端口)${RESET}"
     fi
-    
+
     return 0
 }
 
@@ -297,12 +297,12 @@ echo "请输入规则 (支持多行粘贴或逗号分隔):"
 INPUT_BUFFER=""
 while true; do
     read -r LINE
-    
+
     # 如果输入为空行或 "done"，处理缓冲区并结束
     if [ -z "$LINE" ] || [ "$LINE" = "done" ]; then
         break
     fi
-    
+
     # 将输入添加到缓冲区
     if [ -z "$INPUT_BUFFER" ]; then
         INPUT_BUFFER="$LINE"
@@ -320,19 +320,19 @@ if [ -n "$INPUT_BUFFER" ]; then
     if ! [[ "$RULES_BEFORE" =~ ^[0-9]+$ ]]; then
         RULES_BEFORE=0
     fi
-    
+
     # 创建临时文件来存储分割后的规则
     TEMP_RULES=$(mktemp)
     echo "$INPUT_BUFFER" | tr ',' '\n' > "$TEMP_RULES"
-    
+
     # 逐行处理规则
     while IFS= read -r rule; do
         process_single_rule "$rule" && RULES_ADDED=$((RULES_ADDED + 1))
     done < "$TEMP_RULES"
-    
+
     # 清理临时文件
     rm -f "$TEMP_RULES"
-    
+
     # 计算实际添加的规则数量
     RULES_AFTER=$(grep -c '\[\[endpoints\]\]' "$CONFIG_FILE" 2>/dev/null || echo 0)
     RULES_AFTER=$(echo "$RULES_AFTER" | tr -d '[:space:]')
@@ -341,7 +341,7 @@ if [ -n "$INPUT_BUFFER" ]; then
         RULES_AFTER=0
     fi
     ACTUAL_ADDED=$((RULES_AFTER - RULES_BEFORE))
-    
+
     if [ "$ACTUAL_ADDED" -gt 0 ]; then
         restart_realm
         echo -e "${GREEN}共添加了 $ACTUAL_ADDED 条规则并重启 Realm 服务。${RESET}"
@@ -406,12 +406,12 @@ echo "请输入要删除的端口 (支持端口范围):"
 INPUT_BUFFER=""
 while true; do
     read -r LINE
-    
+
     # 如果输入为空行或 "done"，处理缓冲区并结束
     if [ -z "$LINE" ] || [ "$LINE" = "done" ]; then
         break
     fi
-    
+
     # 将输入添加到缓冲区
     if [ -z "$INPUT_BUFFER" ]; then
         INPUT_BUFFER="$LINE"
@@ -429,53 +429,53 @@ if [ -n "$INPUT_BUFFER" ]; then
     if ! [[ "$RULES_BEFORE" =~ ^[0-9]+$ ]]; then
         RULES_BEFORE=0
     fi
-    
+
     # 创建临时文件来存储分割后的端口
     TEMP_PORTS=$(mktemp)
     echo "$INPUT_BUFFER" | tr ',' '\n' > "$TEMP_PORTS"
-    
+
     # 逐行处理端口
     while IFS= read -r port_input; do
         # 去除前后空格
         port_input=$(echo "$port_input" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        
+
         # 跳过空行
         if [ -z "$port_input" ]; then
             continue
         fi
-        
+
         # 解析端口范围
         local ports_output
         ports_output=$(parse_port_range "$port_input")
         if [ $? -ne 0 ]; then
             continue
         fi
-        
+
         # 将端口输出转换为数组
         local ports=($ports_output)
-        
+
         # 为每个端口删除规则
         for port in "${ports[@]}"; do
             # 使用更简单的方法：直接使用 awk 删除包含指定端口的整个 [[endpoints]] 块
             local temp_config=$(mktemp)
             local deleted=false
-            
+
             # 使用 awk 来删除包含指定端口的整个 [[endpoints]] 块
             awk -v target_port="$port" '
-            BEGIN { 
+            BEGIN {
                 skip_block = 0
                 in_endpoints = 0
             }
-            /^\[\[endpoints\]\]$/ { 
+            /^\[\[endpoints\]\]$/ {
                 in_endpoints = 1
                 skip_block = 0
                 next
             }
-            in_endpoints && /listen = "0\.0\.0\.0:'$port'"/ { 
+            in_endpoints && /listen = "0\.0\.0\.0:'$port'"/ {
                 skip_block = 1
                 next
             }
-            in_endpoints && /^$/ { 
+            in_endpoints && /^$/ {
                 in_endpoints = 0
                 if (skip_block == 0) {
                     print "[[endpoints]]"
@@ -483,17 +483,17 @@ if [ -n "$INPUT_BUFFER" ]; then
                 skip_block = 0
                 next
             }
-            in_endpoints && skip_block == 0 { 
+            in_endpoints && skip_block == 0 {
                 print "[[endpoints]]"
                 print $0
                 in_endpoints = 0
                 next
             }
-            !in_endpoints { 
+            !in_endpoints {
                 print $0
             }
             ' "$CONFIG_FILE" > "$temp_config"
-            
+
             # 检查是否有变化
             if ! cmp -s "$CONFIG_FILE" "$temp_config"; then
                 mv "$temp_config" "$CONFIG_FILE"
@@ -502,7 +502,7 @@ if [ -n "$INPUT_BUFFER" ]; then
             else
                 rm -f "$temp_config"
             fi
-            
+
             if [ "$deleted" = true ]; then
                 echo -e "${GREEN}已删除端口 $port 的规则${RESET}"
             else
@@ -510,10 +510,10 @@ if [ -n "$INPUT_BUFFER" ]; then
             fi
         done
     done < "$TEMP_PORTS"
-    
+
     # 清理临时文件
     rm -f "$TEMP_PORTS"
-    
+
     # 计算实际删除的规则数量
     RULES_AFTER=$(grep -c '\[\[endpoints\]\]' "$CONFIG_FILE" 2>/dev/null || echo 0)
     RULES_AFTER=$(echo "$RULES_AFTER" | tr -d '[:space:]')
@@ -522,7 +522,7 @@ if [ -n "$INPUT_BUFFER" ]; then
         RULES_AFTER=0
     fi
     ACTUAL_DELETED=$((RULES_BEFORE - RULES_AFTER))
-    
+
     if [ "$ACTUAL_DELETED" -gt 0 ]; then
         restart_realm
         echo -e "${GREEN}共删除了 $ACTUAL_DELETED 条规则并重启 Realm 服务。${RESET}"
