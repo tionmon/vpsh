@@ -66,64 +66,92 @@ SCRIPT_NAME="sync_dropbox.sh"
 echo ""
 echo -e "${YELLOW}[3/4] 正在生成脚本文件: $SCRIPT_NAME ...${NC}"
 
-cat > "$SCRIPT_NAME" << EOF
+# 🆕 检查是否存在同名脚本，如果存在则自动覆盖
+if [ -f "$SCRIPT_NAME" ]; then
+    echo -e "${YELLOW}⚠ 检测到已存在的脚本文件，将自动覆盖...${NC}"
+    rm -f "$SCRIPT_NAME"
+fi
+
+cat > "$SCRIPT_NAME" << 'EOF'
 #!/bin/bash
 
 # ==========================================
 # 自动生成的 Dropbox 同步配置
 # ==========================================
-TARGET_DIR="$TARGET_DIR"
-URL="$FINAL_LINK"
+TARGET_DIR="TARGET_DIR_PLACEHOLDER"
+URL="URL_PLACEHOLDER"
 
 echo "---------------------------------------------"
 echo "开始同步任务"
-echo "本地目录: \$TARGET_DIR"
+echo "本地目录: $TARGET_DIR"
 echo "---------------------------------------------"
 
 # 1. 确保目录存在
-if [ ! -d "\$TARGET_DIR" ]; then
-    mkdir -p "\$TARGET_DIR"
-fi
-
-# 2. 清空目录 (确保完全同步)
-# 安全检查: 防止变量为空导致删除根目录
-if [[ -n "\$TARGET_DIR" && "\$TARGET_DIR" != "/" ]]; then
-    echo "正在清理旧文件..."
-    rm -rf "\$TARGET_DIR"/*
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "目录不存在，正在创建..."
+    mkdir -p "$TARGET_DIR"
 else
-    echo "错误：目标目录路径不安全，停止执行以保护系统。"
-    exit 1
+    # 🆕 目录已存在，清空所有内容
+    echo "⚠ 检测到目录已存在，正在清空旧文件..."
+    
+    # 安全检查: 防止变量为空或为根目录导致误删
+    if [[ -z "$TARGET_DIR" || "$TARGET_DIR" == "/" || "$TARGET_DIR" == "/root" || "$TARGET_DIR" == "/home" ]]; then
+        echo "❌ 错误：目标目录路径不安全（$TARGET_DIR），停止执行以保护系统。"
+        exit 1
+    fi
+    
+    # 删除目录下所有文件和子目录（但保留目录本身）
+    rm -rf "${TARGET_DIR:?}"/*
+    rm -rf "${TARGET_DIR:?}"/.[!.]*  # 删除隐藏文件（排除 . 和 ..）
+    
+    echo "✅ 旧文件已清空"
 fi
 
-# 3. 下载文件
+# 2. 下载文件
 echo "正在从 Dropbox 下载..."
 # -O 指定输出文件名, -q 减少杂乱输出但保留进度条
-wget -q --show-progress -O /tmp/dropbox_pkg.zip "\$URL"
+wget -q --show-progress -O /tmp/dropbox_pkg.zip "$URL"
 
 # 检查下载是否成功（判断文件大小是否大于0）
 if [ ! -s /tmp/dropbox_pkg.zip ]; then
-    echo "下载失败！文件为空。请检查 Dropbox 链接是否已失效。"
+    echo "❌ 下载失败！文件为空。请检查 Dropbox 链接是否已失效。"
     rm -f /tmp/dropbox_pkg.zip
     exit 1
 fi
 
-# 4. 解压
+# 3. 解压
 echo "正在解压..."
-unzip -q -o /tmp/dropbox_pkg.zip -d "\$TARGET_DIR"
+unzip -q -o /tmp/dropbox_pkg.zip -d "$TARGET_DIR"
 
-# 5. 清理压缩包
+if [ $? -ne 0 ]; then
+    echo "❌ 解压失败！请检查下载的文件是否完整。"
+    rm -f /tmp/dropbox_pkg.zip
+    exit 1
+fi
+
+# 4. 清理压缩包
 rm -f /tmp/dropbox_pkg.zip
 
 echo "---------------------------------------------"
 echo "✅ 同步完成！"
-echo "文件已更新至: \$TARGET_DIR"
+echo "文件已更新至: $TARGET_DIR"
+echo "文件数量: $(find "$TARGET_DIR" -type f | wc -l)"
 echo "---------------------------------------------"
 EOF
+
+# 替换占位符为实际值
+sed -i "s|TARGET_DIR_PLACEHOLDER|$TARGET_DIR|g" "$SCRIPT_NAME"
+sed -i "s|URL_PLACEHOLDER|$FINAL_LINK|g" "$SCRIPT_NAME"
 
 # 赋予执行权限
 chmod +x "$SCRIPT_NAME"
 
-echo -e "${GREEN}[4/4] 部署完成！${NC}"
+echo -e "${GREEN}✅ [4/4] 部署完成！${NC}"
 echo ""
 echo -e "以后需要同步时，只需运行："
-echo -e "${GREEN}./$SCRIPT_NAME${NC}"
+echo -e "${GREEN}    ./$SCRIPT_NAME${NC}"
+echo ""
+echo -e "${BLUE}💡 提示：${NC}"
+echo -e "  • 每次运行同步脚本时，会自动删除目标目录下的所有文件"
+echo -e "  • 重新运行本配置脚本会自动覆盖 $SCRIPT_NAME"
+echo ""
