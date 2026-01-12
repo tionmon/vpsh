@@ -90,6 +90,22 @@ install_caddy() {
     check_status "Caddy 安装完成" "Caddy 安装失败"
 }
 
+# 倒计时重启
+countdown_reboot() {
+    local seconds=$1
+    print_warning "系统将在 ${seconds} 秒后自动重启..."
+    echo ""
+    
+    for ((i=$seconds; i>0; i--)); do
+        echo -ne "${YELLOW}重启倒计时: ${i} 秒... (按 Ctrl+C 取消)${NC}\r"
+        sleep 1
+    done
+    
+    echo ""
+    print_info "正在重启系统..."
+    sudo reboot
+}
+
 # 主函数
 main() {
     clear
@@ -122,7 +138,7 @@ main() {
     local auto_mode=false
     
     if [[ "$mode" == "a" || "$mode" == "A" ]]; then
-        print_info "已选择自动模式，将执行所有步骤"
+        print_info "已选择自动模式，将执行所有步骤并在完成后自动重启"
         install_docker_opt=true
         install_basic=true
         install_bbr_opt=true
@@ -273,8 +289,16 @@ main() {
     $install_caddy_opt && echo -e "  ${GREEN}✓${NC} Caddy Web 服务器"
     echo ""
     
-    if $install_bbr_opt; then
-        print_warning "建议重启系统以使 BBR 优化生效: sudo reboot"
+    # 根据模式决定是否自动重启
+    if $auto_mode; then
+        echo -e "${GREEN}════════════════════════════════════════════════${NC}"
+        print_success "所有组件安装完成！"
+        echo ""
+        countdown_reboot 10
+    else
+        if $install_bbr_opt; then
+            print_warning "建议重启系统以使 BBR 优化生效: sudo reboot"
+        fi
     fi
 }
 
