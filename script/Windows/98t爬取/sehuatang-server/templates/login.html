@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 — Sehuatang 磁力爬虫</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: #0a0a1a;
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        }
+        .login-card {
+            width: 380px; padding: 40px 36px; border-radius: 20px;
+            background: linear-gradient(145deg, #16213e 0%, #1a1a2e 100%);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .login-card h1 {
+            text-align: center; font-size: 22px; margin-bottom: 8px;
+            background: linear-gradient(90deg, #667eea, #ff6b9d);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .login-card .subtitle {
+            text-align: center; font-size: 13px; color: #666; margin-bottom: 30px;
+        }
+        .field { margin-bottom: 20px; }
+        .field label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; }
+        .field input {
+            width: 100%; padding: 12px 16px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05); color: #e0e0e0;
+            font-size: 15px; outline: none; transition: border-color 0.3s;
+        }
+        .field input:focus { border-color: #667eea; }
+        .error {
+            color: #ff6b6b; font-size: 13px; text-align: center;
+            margin-bottom: 16px; padding: 8px; border-radius: 8px;
+            background: rgba(255,107,107,0.1);
+        }
+        .btn-login {
+            width: 100%; padding: 13px; border: none; border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .btn-login:hover {
+            box-shadow: 0 6px 25px rgba(102,126,234,0.5);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>🧲 Sehuatang 磁力爬虫</h1>
+        <p class="subtitle">请输入访问密码</p>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="/login">
+            <div class="field">
+                <label>密码</label>
+                <input type="password" name="password" placeholder="请输入密码" autofocus required>
+            </div>
+            <button type="submit" class="btn-login">登 录</button>
+        </form>
+    </div>
+</body>
+</html>

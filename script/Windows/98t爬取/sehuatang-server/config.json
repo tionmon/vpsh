@@ -1,0 +1,16 @@
+{
+    "password_hash": "",
+    "secret_key": "",
+    "telegram": {
+        "enabled": false,
+        "bot_token": "",
+        "default_chat_id": ""
+    },
+    "scheduled_tasks": [],
+    "scraper": {
+        "delay_min": 2,
+        "delay_max": 4,
+        "max_retries": 5,
+        "headless": true
+    }
+}
