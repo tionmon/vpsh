@@ -1,0 +1,29 @@
+services:
+  # JavBus API 服务
+  javbusapi:
+    image: ovnrain/javbus-api
+    container_name: javbusapi
+    restart: unless-stopped
+    ports:
+      - '3030:3000'
+
+  # Telegram Bot 服务
+  javbusbot:
+    build: .
+    container_name: javbusbot
+    restart: unless-stopped
+    depends_on:
+      - javbusapi
+    environment:
+      # Telegram Bot Token (必填)
+      - BOT_TOKEN=${BOT_TOKEN}
+      # 默认 API 地址 (内部网络使用容器名)
+      - DEFAULT_API_URL=http://javbusapi:3000
+      # API 认证 Token (可选)
+      - API_AUTH_TOKEN=${API_AUTH_TOKEN:-}
+      # Symedia 推送配置 (可选)
+      - SYMEDIA_URL=${SYMEDIA_URL:-}
+      - SYMEDIA_TOKEN=${SYMEDIA_TOKEN:-symedia}
+      - SYMEDIA_API_PATH=${SYMEDIA_API_PATH:-/api/v1/plugin/cloud_helper/add_offline_urls_115}
+      - SYMEDIA_CID=${SYMEDIA_CID:-0}
+

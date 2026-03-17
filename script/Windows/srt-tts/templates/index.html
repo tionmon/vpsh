@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SRT 字幕转语音</title>
+<meta name="description" content="上传 SRT 字幕文件，使用 Edge-TTS 生成与时间表对齐的语音">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --glass:rgba(255,255,255,0.32);
+  --glass-hover:rgba(255,255,255,0.45);
+  --glass-border:rgba(255,255,255,0.55);
+  --glass-blur:20px;
+  --r:20px;--rs:12px;
+  --c1:#111;--c2:#444;--c3:#777;--c4:#aaa;
+  --bg:#e4e7eb;
+  --shadow:0 8px 32px rgba(0,0,0,0.07);
+}
+html{font-size:15px}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--c1);
+  min-height:100vh;overflow-x:hidden;
+  line-height:1.5;
+}
+/* ─── 背景装饰 ─── */
+.bg-shapes{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.shape{position:absolute;border-radius:50%;filter:blur(90px)}
+.s1{width:420px;height:420px;background:rgba(175,180,190,0.5);top:-80px;left:-80px}
+.s2{width:500px;height:500px;background:rgba(195,200,210,0.4);top:45%;right:-160px}
+.s3{width:360px;height:360px;background:rgba(165,170,180,0.45);bottom:-100px;left:28%}
+.s4{width:280px;height:280px;background:rgba(210,215,220,0.5);top:15%;left:55%}
+.s5{width:200px;height:200px;background:rgba(185,185,195,0.35);top:60%;left:10%}
+
+/* ─── 容器 ─── */
+.wrap{position:relative;z-index:1;max-width:920px;margin:0 auto;padding:32px 20px 60px}
+
+/* ─── 毛玻璃卡片 ─── */
+.glass{
+  background:var(--glass);
+  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
+  border:1px solid var(--glass-border);
+  border-radius:var(--r);box-shadow:var(--shadow);
+  padding:28px;margin-bottom:20px;
+  transition:transform .2s,box-shadow .2s;
+}
+.glass:hover{transform:translateY(-1px);box-shadow:0 12px 40px rgba(0,0,0,0.1)}
+.glass h2{font-size:1.05rem;font-weight:600;margin-bottom:18px;letter-spacing:-.01em}
+
+/* ─── 头部 ─── */
+.header{text-align:center;padding:36px 28px}
+.header h1{font-size:1.65rem;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+.header p{color:var(--c3);font-size:.88rem;font-weight:400}
+
+/* ─── 双列布局 ─── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+
+/* ─── 上传区域 ─── */
+.dropzone{
+  border:2px dashed var(--c4);border-radius:var(--rs);
+  padding:48px 24px;text-align:center;cursor:pointer;
+  transition:border-color .2s,background .2s;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  min-height:200px;justify-content:center;
+}
+.dropzone:hover,.dropzone.drag-over{
+  border-color:var(--c2);background:rgba(255,255,255,0.25);
+}
+.dropzone svg{width:44px;height:44px;stroke:var(--c3);stroke-width:1.5;fill:none}
+.dropzone .label{font-size:.95rem;color:var(--c2);font-weight:500}
+.dropzone .hint{font-size:.8rem;color:var(--c3)}
+.file-info{
+  margin-top:14px;padding:12px 16px;
+  background:rgba(255,255,255,0.3);border-radius:var(--rs);
+  font-size:.85rem;color:var(--c2);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.file-info .name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px}
+.file-info .clear{cursor:pointer;color:var(--c3);font-size:.75rem;text-decoration:underline}
+.hidden{display:none!important}
+
+/* ─── 设置面板 ─── */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+@media(max-width:500px){.settings-grid{grid-template-columns:1fr}}
+.sg{display:flex;flex-direction:column;gap:5px}
+.sg.full{grid-column:1/-1}
+.sg label{font-size:.78rem;font-weight:500;color:var(--c2);text-transform:uppercase;letter-spacing:.04em}
+.sg select,.sg input[type=number]{
+  width:100%;padding:9px 12px;
+  background:rgba(255,255,255,0.45);
+  border:1px solid rgba(0,0,0,0.08);border-radius:8px;
+  font-family:inherit;font-size:.88rem;color:var(--c1);
+  outline:none;transition:border-color .15s;
+  -webkit-appearance:none;appearance:none;
+}
+.sg select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
+.sg select:focus,.sg input:focus{border-color:rgba(0,0,0,0.25)}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-row input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:5px;background:rgba(0,0,0,0.1);border-radius:4px;outline:none}
+.range-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--c1);cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.2)}
+.range-row .val{font-size:.82rem;font-weight:600;color:var(--c1);min-width:42px;text-align:right}
+
+/* ─── 按钮 ─── */
+.actions{text-align:center;margin-bottom:20px}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:13px 36px;border-radius:var(--rs);font-family:inherit;
+  font-size:.92rem;font-weight:600;cursor:pointer;border:none;
+  transition:all .2s;text-decoration:none;
+}
+.btn-primary{background:var(--c1);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.15)}
+.btn-primary:hover:not(:disabled){background:#333;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,0.2)}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-ghost{background:rgba(255,255,255,0.35);color:var(--c1);border:1px solid rgba(0,0,0,0.1)}
+.btn-ghost:hover{background:rgba(255,255,255,0.55)}
+
+/* ─── 进度 ─── */
+.progress-section .phase{font-size:.82rem;color:var(--c3);margin-bottom:10px;font-weight:500}
+.pbar{width:100%;height:10px;background:rgba(0,0,0,0.06);border-radius:6px;overflow:hidden;margin-bottom:12px}
+.pbar-fill{height:100%;background:linear-gradient(90deg,#555,#222);border-radius:6px;transition:width .4s ease;width:0}
+.pbar-fill.animated{animation:shimmer 1.5s infinite linear}
+@keyframes shimmer{
+  0%{background-position:200% 0}100%{background-position:-200% 0}
+}
+.pstats{display:flex;gap:24px;font-size:.82rem;color:var(--c2);flex-wrap:wrap}
+.pstats span{display:inline-flex;align-items:center;gap:4px}
+.pstats .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot-ok{background:#4a4}
+.dot-fail{background:#a44}
+.dot-total{background:#888}
+.pmsg{margin-top:10px;font-size:.84rem;color:var(--c3)}
+
+/* ─── 结果 ─── */
+.result-section{text-align:center}
+.result-section .stats{font-size:.88rem;color:var(--c2);margin-bottom:20px;line-height:1.8}
+.result-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+
+/* ─── 错误 ─── */
+.error-box{
+  padding:14px 18px;background:rgba(180,50,50,0.08);
+  border:1px solid rgba(180,50,50,0.2);border-radius:var(--rs);
+  color:#833;font-size:.88rem;margin-top:12px;
+}
+
+/* ─── 动画 ─── */
+.fade-in{animation:fadeIn .4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="bg-shapes">
+  <div class="shape s1"></div><div class="shape s2"></div>
+  <div class="shape s3"></div><div class="shape s4"></div><div class="shape s5"></div>
+</div>
+
+<div class="wrap">
+  <!-- 头部 -->
+  <div class="glass header">
+    <h1>SRT 字幕转语音</h1>
+  </div>
+
+  <!-- 主区域 -->
+  <div class="grid2">
+    <!-- 上传 -->
+    <div class="glass" id="uploadCard">
+      <h2>📂 上传字幕文件</h2>
+      <div class="dropzone" id="dropzone">
+        <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L8 8m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2" stroke-linecap="round"/></svg>
+        <span class="label">拖拽 SRT 文件到此处</span>
+        <span class="hint">或 点击选择文件</span>
+      </div>
+      <input type="file" id="fileInput" accept=".srt" style="display:none">
+      <div class="file-info hidden" id="fileInfo">
+        <span class="name" id="fileName"></span>
+        <span class="clear" id="fileClear">清除</span>
+      </div>
+    </div>
+
+    <!-- 设置 -->
+    <div class="glass" id="settingsCard">
+      <h2>⚙️ 参数设置</h2>
+      <div class="settings-grid">
+        <div class="sg">
+          <label>语言筛选</label>
+          <select id="langFilter">
+            <option value="zh-CN">中文</option>
+            <option value="en-US">英语 (US)</option>
+            <option value="en-GB">英语 (UK)</option>
+            <option value="ja-JP">日语</option>
+            <option value="ko-KR">韩语</option>
+            <option value="">全部</option>
+          </select>
+        </div>
+        <div class="sg">
+          <label>声音</label>
+          <select id="voiceSelect"><option>加载中...</option></select>
+        </div>
+        <div class="sg">
+          <label>并发数</label>
+          <div class="range-row">
+            <input type="range" id="concurrency" min="1" max="64" value="5">
+            <span class="val" id="concurrencyVal">5</span>
+          </div>
+        </div>
+        <div class="sg">
+          <label>时长容差 %</label>
+          <div class="range-row">
+            <input type="range" id="tolerance" min="5" max="40" value="15">
+            <span class="val" id="toleranceVal">15%</span>
+          </div>
+        </div>
+        <div class="sg">
+          <label>音量</label>
+          <div class="range-row">
+            <input type="range" id="volume" min="-50" max="50" value="0">
+            <span class="val" id="volumeVal">0%</span>
+          </div>
+        </div>
+        <div class="sg">
+          <label>音调</label>
+          <div class="range-row">
+            <input type="range" id="pitch" min="-30" max="30" value="0">
+            <span class="val" id="pitchVal">0Hz</span>
+          </div>
+        </div>
+        <div class="sg">
+          <label>语速调整次数</label>
+          <input type="number" id="maxRetries" value="2" min="0" max="5">
+        </div>
+        <div class="sg">
+          <label>网络重试次数</label>
+          <input type="number" id="ttsRetries" value="3" min="1" max="10">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 开始按钮 -->
+  <div class="actions">
+    <button class="btn btn-primary" id="startBtn" disabled>开始生成</button>
+  </div>
+
+  <!-- 进度 -->
+  <div class="glass progress-section hidden" id="progressSection">
+    <h2>📊 生成进度</h2>
+    <div class="phase" id="phaseText">准备中...</div>
+    <div class="pbar"><div class="pbar-fill" id="pbarFill"></div></div>
+    <div class="pstats">
+      <span><i class="dot dot-total"></i> 总计: <b id="statTotal">0</b></span>
+      <span><i class="dot dot-ok"></i> 成功: <b id="statSuccess">0</b></span>
+      <span><i class="dot dot-fail"></i> 失败: <b id="statFailed">0</b></span>
+      <span>完成: <b id="statPercent">0</b>%</span>
+    </div>
+    <div class="pmsg" id="progressMsg"></div>
+  </div>
+
+  <!-- 结果 -->
+  <div class="glass result-section hidden fade-in" id="resultSection">
+    <h2>🎉 生成完成</h2>
+    <div class="stats" id="resultStats"></div>
+    <div class="result-actions">
+      <a class="btn btn-primary" id="downloadBtn" href="#">⬇ 下载 MP3</a>
+      <a class="btn btn-ghost hidden" id="failedBtn" href="#">📋 失败清单</a>
+    </div>
+  </div>
+
+  <!-- 错误 -->
+  <div class="glass hidden" id="errorSection">
+    <h2>❌ 出错了</h2>
+    <div class="error-box" id="errorMsg"></div>
+    <div style="text-align:center;margin-top:16px">
+      <button class="btn btn-ghost" onclick="resetUI()">重新开始</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let selectedFile = null;
+let currentTaskId = null;
+let eventSource = null;
+
+// ─── 声音列表 ───
+async function fetchVoices(lang) {
+  try {
+    const r = await fetch(`/api/voices?lang=${encodeURIComponent(lang || '')}`);
+    const voices = await r.json();
+    const sel = $('#voiceSelect');
+    sel.innerHTML = '';
+    voices.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.name;
+      o.textContent = `${v.gender === 'Female' ? '♀' : '♂'} ${v.name}`;
+      if (v.name === 'zh-CN-YunxiNeural') o.selected = true;
+      sel.appendChild(o);
+    });
+  } catch (e) { console.error('获取声音列表失败', e); }
+}
+
+$('#langFilter').addEventListener('change', e => fetchVoices(e.target.value));
+fetchVoices('zh-CN');
+
+// ─── 滑块值显示 ───
+function bindSlider(id, valId, suffix) {
+  const sl = $(`#${id}`), vl = $(`#${valId}`);
+  sl.addEventListener('input', () => {
+    const v = parseInt(sl.value);
+    vl.textContent = (v >= 0 ? v : v) + suffix;
+  });
+}
+bindSlider('concurrency', 'concurrencyVal', '');
+bindSlider('tolerance', 'toleranceVal', '%');
+bindSlider('volume', 'volumeVal', '%');
+bindSlider('pitch', 'pitchVal', 'Hz');
+
+// ─── 文件上传 ───
+const dz = $('#dropzone');
+const fi = $('#fileInput');
+
+dz.addEventListener('click', () => fi.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.toLowerCase().endsWith('.srt')) selectFile(f);
+});
+fi.addEventListener('change', () => { if (fi.files[0]) selectFile(fi.files[0]); });
+
+function selectFile(f) {
+  selectedFile = f;
+  $('#fileName').textContent = f.name;
+  $('#fileInfo').classList.remove('hidden');
+  dz.style.display = 'none';
+  $('#startBtn').disabled = false;
+}
+$('#fileClear').addEventListener('click', () => {
+  selectedFile = null;
+  fi.value = '';
+  $('#fileInfo').classList.add('hidden');
+  dz.style.display = '';
+  $('#startBtn').disabled = true;
+});
+
+// ─── 开始生成 ───
+$('#startBtn').addEventListener('click', startGeneration);
+
+async function startGeneration() {
+  if (!selectedFile) return;
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  fd.append('voice', $('#voiceSelect').value);
+  fd.append('concurrency', $('#concurrency').value);
+  fd.append('volume', $('#volume').value);
+  fd.append('pitch', $('#pitch').value);
+  fd.append('tolerance', $('#tolerance').value);
+  fd.append('maxRetries', $('#maxRetries').value);
+  fd.append('ttsRetries', $('#ttsRetries').value);
+
+  $('#startBtn').disabled = true;
+  $('#startBtn').textContent = '处理中...';
+  $('#progressSection').classList.remove('hidden');
+  $('#resultSection').classList.add('hidden');
+  $('#errorSection').classList.add('hidden');
+
+  try {
+    const r = await fetch('/api/start', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    currentTaskId = data.taskId;
+    connectSSE(data.taskId);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// ─── SSE 进度 ───
+function connectSSE(taskId) {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource(`/api/progress/${taskId}`);
+  eventSource.onmessage = e => {
+    try {
+      const d = JSON.parse(e.data);
+      updateProgress(d);
+      if (d.status === 'done' || d.status === 'error') {
+        eventSource.close(); eventSource = null;
+      }
+    } catch (err) {}
+  };
+  eventSource.onerror = () => { eventSource.close(); eventSource = null; };
+}
+
+function updateProgress(d) {
+  const p = d.progress || {};
+  $('#statTotal').textContent = p.total || 0;
+  $('#statSuccess').textContent = p.success || 0;
+  $('#statFailed').textContent = p.failed || 0;
+  $('#statPercent').textContent = p.percent || 0;
+  $('#pbarFill').style.width = (p.percent || 0) + '%';
+  $('#progressMsg').textContent = p.message || '';
+
+  const phaseMap = {
+    preparing: '⏳ 准备中', generating: '🎙 生成中（第一轮）',
+    retrying: '🔄 重试中（第二轮）', assembling: '🔧 拼装中', done: '✅ 完成'
+  };
+  $('#phaseText').textContent = phaseMap[p.phase] || p.phase || '';
+
+  if (p.phase === 'assembling') {
+    $('#pbarFill').classList.add('animated');
+  }
+
+  if (d.status === 'done') {
+    $('#pbarFill').classList.remove('animated');
+    showResult(d);
+  } else if (d.status === 'error') {
+    showError(d.error || '未知错误');
+  }
+}
+
+function showResult(d) {
+  const r = d.result || {};
+  const sizeMB = ((r.file_size || 0) / 1024 / 1024).toFixed(1);
+  $('#resultStats').innerHTML =
+    `成功 <b>${r.success_count}</b> / ${r.total_count} 条 · ` +
+    `时长 <b>${r.duration}</b> · 文件大小 <b>${sizeMB} MB</b>`;
+  $('#downloadBtn').href = `/api/download/${currentTaskId}`;
+  if (r.failed_segments && r.failed_segments.length > 0) {
+    const fb = $('#failedBtn');
+    fb.classList.remove('hidden');
+    fb.href = `/api/failed/${currentTaskId}`;
+    fb.setAttribute('target', '_blank');
+  }
+  $('#resultSection').classList.remove('hidden');
+  $('#startBtn').textContent = '开始生成';
+  $('#startBtn').disabled = false;
+}
+
+function showError(msg) {
+  $('#errorMsg').textContent = msg;
+  $('#errorSection').classList.remove('hidden');
+  $('#startBtn').textContent = '开始生成';
+  $('#startBtn').disabled = false;
+}
+
+function resetUI() {
+  $('#progressSection').classList.add('hidden');
+  $('#resultSection').classList.add('hidden');
+  $('#errorSection').classList.add('hidden');
+  $('#pbarFill').style.width = '0';
+  $('#pbarFill').classList.remove('animated');
+}
+</script>
+</body>
+</html>
