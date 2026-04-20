@@ -1,0 +1,57 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  cfddns — Cloudflare DNS Scheduled Resolver
+#  Configuration File
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Log level: DEBUG, INFO, WARNING, ERROR
+log_level: INFO
+
+# ── Cloudflare Authentication ─────────────────────────
+# Option 1: API Token (recommended, scoped permissions)
+#   Create at: https://dash.cloudflare.com/profile/api-tokens
+#   Required permissions: Zone:DNS:Edit, Zone:Zone:Read
+#
+# Option 2: Global API Key + Email
+#   (full account access — less secure, but simpler)
+
+cloudflare:
+  # ── Option 1: API Token (recommended) ──
+  api_token: ""
+
+  # ── Option 2: Global API Key + Email ──
+  # email: "your@email.com"
+  # api_key: "your_global_api_key_here"
+
+# ── DNS Schedules ─────────────────────────────────────
+# Each schedule defines a domain and its time-based IP mappings.
+#
+# Fields:
+#   domain   — Full domain name (e.g., a.test.com)
+#   proxied  — Whether to proxy through Cloudflare CDN (default: false)
+#   ttl      — TTL in seconds, 1 = Auto (default: 1)
+#   records  — List of { time: "HH:MM", ip: "x.x.x.x" }
+#
+# The scheduler checks every 30 seconds and fires jobs
+# at the specified times (server local timezone).
+
+schedules:
+  - domain: a.test.com
+    proxied: false
+    ttl: 1
+    records:
+      - time: "10:00"
+        ip: 1.1.1.1
+      - time: "11:00"
+        ip: 2.2.2.2
+      - time: "19:00"
+        ip: 3.3.3.3
+
+  # ── More examples ──
+  # - domain: b.test.com
+  #   proxied: true
+  #   ttl: 300
+  #   records:
+  #     - time: "08:00"
+  #       ip: 10.0.0.1
+  #     - time: "20:00"
+  #       ip: 10.0.0.2

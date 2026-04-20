@@ -1,0 +1,23 @@
+[Unit]
+Description=cfddns — Cloudflare DNS Scheduled Resolver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cfddns
+ExecStart=/opt/cfddns/venv/bin/python3 /opt/cfddns/cfddns.py run
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/cfddns/logs
+
+[Install]
+WantedBy=multi-user.target
