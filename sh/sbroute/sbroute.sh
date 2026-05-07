@@ -29,9 +29,6 @@ err()   { echo -e "${RED}[✗]${NC} $*"; }
 die()   { err "$@"; exit 1; }
 title() { echo -e "\n${BOLD}${CYAN}══ $* ══${NC}\n"; }
 
-# 通用 jq 写入: _jq_write <file> <jq_args...>
-_jq_write() { local f="$1"; shift; local t; t=$(mktemp); jq "$@" "$f" > "$t" && mv "$t" "$f"; }
-
 check_root() {
     [[ $EUID -eq 0 ]] || die "请以 root 权限运行此脚本"
 }
@@ -156,22 +153,31 @@ out_add_ss() {
     info "已添加 Shadowsocks 出站: $tag ($server:$port, $method)"
 }
 
-# socks 和 http 共用（仅 type 不同）
-_out_add_proxy() {
-    local type="$1"; shift
-    [[ $# -ge 3 ]] || die "用法: sbroute out add $type <tag> <server> <port> [user] [pass]"
+out_add_socks() {
+    [[ $# -ge 3 ]] || die "用法: sbroute out add socks <tag> <server> <port> [user] [pass]"
     local tag="$1" server="$2" port="$3" user="${4:-}" pass="${5:-}"
     _check_tag_unique "$tag"
     local obj
-    obj=$(jq -n --arg tp "$type" --arg t "$tag" --arg s "$server" --argjson p "$port" \
-        '{type:$tp,tag:$t,server:$s,server_port:$p}')
+    obj=$(jq -n --arg t "$tag" --arg s "$server" --argjson p "$port" \
+        '{type:"socks",tag:$t,server:$s,server_port:$p,version:"5"}')
     [[ -n "$user" ]] && obj=$(echo "$obj" | jq --arg u "$user" '. + {username:$u}')
     [[ -n "$pass" ]] && obj=$(echo "$obj" | jq --arg p "$pass" '. + {password:$p}')
     _append_outbound "$obj"
-    info "已添加 ${type^^} 出站: $tag ($server:$port)"
+    info "已添加 SOCKS5 出站: $tag ($server:$port)"
 }
-out_add_socks() { _out_add_proxy socks "$@"; }
-out_add_http()  { _out_add_proxy http "$@"; }
+
+out_add_http() {
+    [[ $# -ge 3 ]] || die "用法: sbroute out add http <tag> <server> <port> [user] [pass]"
+    local tag="$1" server="$2" port="$3" user="${4:-}" pass="${5:-}"
+    _check_tag_unique "$tag"
+    local obj
+    obj=$(jq -n --arg t "$tag" --arg s "$server" --argjson p "$port" \
+        '{type:"http",tag:$t,server:$s,server_port:$p}')
+    [[ -n "$user" ]] && obj=$(echo "$obj" | jq --arg u "$user" '. + {username:$u}')
+    [[ -n "$pass" ]] && obj=$(echo "$obj" | jq --arg p "$pass" '. + {password:$p}')
+    _append_outbound "$obj"
+    info "已添加 HTTP 出站: $tag ($server:$port)"
+}
 
 out_add_vless() {
     [[ $# -ge 4 ]] || die "用法: sbroute out add vless <tag> <server> <port> <uuid> [flow] [sni]"
@@ -344,20 +350,22 @@ _parse_vless_url() {
     # flow
     [[ -n "$flow" ]] && obj=$(echo "$obj" | jq --arg f "$flow" '. + {flow:$f}')
 
-    # TLS / Reality (unified)
-    if [[ "$security" == "reality" || "$security" == "tls" ]]; then
-        local tls_args=(--argjson enabled true)
-        local tls_expr='{enabled:$enabled}'
-        if [[ -n "$sni" ]]; then tls_args+=(--arg sni "$sni"); tls_expr+=' + {server_name:$sni}'; fi
-        if [[ -n "$fp" ]]; then tls_args+=(--arg fp "$fp"); tls_expr+=' + {utls:{enabled:true,fingerprint:$fp}}'; fi
-        if [[ -n "$alpn" ]]; then tls_args+=(--arg alpn "$alpn"); tls_expr+=' + {alpn:($alpn|split(","))}'; fi
-        if [[ "$security" == "reality" ]]; then
-            local r_expr='{enabled:true}'
-            [[ -n "$pbk" ]] && { tls_args+=(--arg pbk "$pbk"); r_expr+=' + {public_key:$pbk}'; }
-            [[ -n "$sid" ]] && { tls_args+=(--arg sid "$sid"); r_expr+=' + {short_id:$sid}'; }
-            tls_expr+=" + {reality:($r_expr)}"
-        fi
-        local tls_obj; tls_obj=$(jq -n "${tls_args[@]}" "$tls_expr")
+    # TLS / Reality
+    if [[ "$security" == "reality" ]]; then
+        local tls_obj='{"enabled":true}'
+        [[ -n "$sni" ]] && tls_obj=$(echo "$tls_obj" | jq --arg s "$sni" '. + {server_name:$s}')
+        local reality_obj='{"enabled":true}'
+        [[ -n "$pbk" ]] && reality_obj=$(echo "$reality_obj" | jq --arg k "$pbk" '. + {public_key:$k}')
+        [[ -n "$sid" ]] && reality_obj=$(echo "$reality_obj" | jq --arg s "$sid" '. + {short_id:$s}')
+        tls_obj=$(echo "$tls_obj" | jq --argjson r "$reality_obj" '. + {reality:$r}')
+        [[ -n "$fp" ]] && tls_obj=$(echo "$tls_obj" | jq --arg u "$fp" '. + {utls:{enabled:true,fingerprint:$u}}')
+        [[ -n "$alpn" ]] && tls_obj=$(echo "$tls_obj" | jq --arg a "$alpn" '. + {alpn:($a|split(","))}')
+        obj=$(echo "$obj" | jq --argjson tls "$tls_obj" '. + {tls:$tls}')
+    elif [[ "$security" == "tls" ]]; then
+        local tls_obj='{"enabled":true}'
+        [[ -n "$sni" ]] && tls_obj=$(echo "$tls_obj" | jq --arg s "$sni" '. + {server_name:$s}')
+        [[ -n "$fp" ]] && tls_obj=$(echo "$tls_obj" | jq --arg u "$fp" '. + {utls:{enabled:true,fingerprint:$u}}')
+        [[ -n "$alpn" ]] && tls_obj=$(echo "$tls_obj" | jq --arg a "$alpn" '. + {alpn:($a|split(","))}')
         obj=$(echo "$obj" | jq --argjson tls "$tls_obj" '. + {tls:$tls}')
     fi
 
@@ -388,7 +396,9 @@ _check_tag_unique() {
 }
 
 _append_outbound() {
-    _jq_write "$OUTBOUNDS_FILE" --argjson o "$1" '. + [$o]'
+    local obj="$1"
+    local tmp; tmp=$(mktemp)
+    jq --argjson o "$obj" '. + [$o]' "$OUTBOUNDS_FILE" > "$tmp" && mv "$tmp" "$OUTBOUNDS_FILE"
 }
 
 out_list() {
@@ -414,8 +424,11 @@ out_del() {
     local exists
     exists=$(jq -r --arg t "$tag" '[.[]|select(.tag==$t)]|length' "$OUTBOUNDS_FILE")
     [[ "$exists" -gt 0 ]] || die "出站 '$tag' 不存在"
-    _jq_write "$OUTBOUNDS_FILE" --arg t "$tag" '[.[]|select(.tag!=$t)]'
-    _jq_write "$ROUTES_FILE" --arg t "$tag" '[.[]|select(.outbound!=$t)]'
+    local tmp; tmp=$(mktemp)
+    jq --arg t "$tag" '[.[]|select(.tag!=$t)]' "$OUTBOUNDS_FILE" > "$tmp" && mv "$tmp" "$OUTBOUNDS_FILE"
+    # 同时清理引用该 tag 的路由规则
+    tmp=$(mktemp)
+    jq --arg t "$tag" '[.[]|select(.outbound!=$t)]' "$ROUTES_FILE" > "$tmp" && mv "$tmp" "$ROUTES_FILE"
     info "已删除出站: $tag（关联路由规则已清理）"
 }
 
@@ -427,7 +440,7 @@ out_show() {
 
 # ==================== 路由规则管理 ====================
 route_add() {
-    [[ $# -ge 2 ]] || die "用法: sbroute route add <outbound_tag> --domain/--suffix/--keyword/... <values>"
+    [[ $# -ge 2 ]] || die "用法: sbroute route add <outbound_tag> --domain/--suffix/--keyword/--geoip/--geosite/... <values>"
     local outbound="$1"; shift
     # 验证 outbound tag 存在
     local tag_ok
@@ -436,41 +449,94 @@ route_add() {
         die "出站 '$outbound' 不存在，请先添加出站"
     fi
 
-    local rule; rule=$(jq -n --arg o "$outbound" '{action:"route",outbound:$o}')
-
-    # 参数名 → jq key 映射
-    local -A _rk=([--domain]=domain [--suffix]=domain_suffix [--keyword]=domain_keyword
-        [--regex]=domain_regex [--ip-cidr]=ip_cidr [--process]=process_name)
+    local rule='{"action":"route"}'
+    rule=$(echo "$rule" | jq --arg o "$outbound" '. + {outbound:$o}')
 
     while [[ $# -gt 0 ]]; do
-        if [[ -n "${_rk[$1]:-}" ]]; then
-            local key="${_rk[$1]}"; shift; [[ $# -gt 0 ]] || die "--${key} 需要参数"
-            rule=$(echo "$rule" | jq --arg k "$key" --arg v "$1" '. + {($k):($v|split(","))}')
-        elif [[ "$1" == "--port" ]]; then
-            shift; [[ $# -gt 0 ]] || die "--port 需要参数"
-            rule=$(echo "$rule" | jq --arg v "$1" '. + {port:($v|split(",")|map(tonumber))}')
-        elif [[ "$1" == "--ruleset" ]]; then
-            shift; [[ $# -gt 0 ]] || die "--ruleset 需要参数"
-            local url="$1" rs_tag rs_exists
-            rs_exists=$(jq -r --arg u "$url" '[.[]|select(.url==$u)]|length' "$RULESETS_FILE")
-            if [[ "$rs_exists" -eq 0 ]]; then
-                rs_tag="rs-$(echo "$url" | md5sum | head -c 8)"
-                local fmt="binary"; [[ "$url" == *.json ]] && fmt="source"
-                local rs_obj; rs_obj=$(jq -n --arg t "$rs_tag" --arg u "$url" --arg f "$fmt" \
-                    --arg d "$(_get_download_detour)" '{type:"remote",tag:$t,format:$f,url:$u,download_detour:$d}')
-                _jq_write "$RULESETS_FILE" --argjson o "$rs_obj" '. + [$o]'
-            else
-                rs_tag=$(jq -r --arg u "$url" '.[]|select(.url==$u)|.tag' "$RULESETS_FILE")
-            fi
-            rule=$(echo "$rule" | jq --arg rs "$rs_tag" \
-                'if .rule_set then .rule_set += [$rs] else . + {rule_set:[$rs]} end')
-        else
-            die "未知路由参数: $1"
-        fi
+        case "$1" in
+            --domain)
+                shift; [[ $# -gt 0 ]] || die "--domain 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {domain:($v|split(","))}')
+                ;;
+            --suffix)
+                shift; [[ $# -gt 0 ]] || die "--suffix 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {domain_suffix:($v|split(","))}')
+                ;;
+            --keyword)
+                shift; [[ $# -gt 0 ]] || die "--keyword 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {domain_keyword:($v|split(","))}')
+                ;;
+            --regex)
+                shift; [[ $# -gt 0 ]] || die "--regex 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {domain_regex:($v|split(","))}')
+                ;;
+            --ip-cidr)
+                shift; [[ $# -gt 0 ]] || die "--ip-cidr 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {ip_cidr:($v|split(","))}')
+                ;;
+            --port)
+                shift; [[ $# -gt 0 ]] || die "--port 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {port:($v|split(",")|map(tonumber))}')
+                ;;
+            --process)
+                shift; [[ $# -gt 0 ]] || die "--process 需要参数"
+                rule=$(echo "$rule" | jq --arg v "$1" '. + {process_name:($v|split(","))}')
+                ;;
+            --geoip)
+                shift; [[ $# -gt 0 ]] || die "--geoip 需要参数 (如: cn, us, jp 等)"
+                local IFS_OLD="$IFS"; IFS=','
+                for _geo_name in $1; do
+                    IFS="$IFS_OLD"
+                    local geo_tag="geoip-${_geo_name}"
+                    local geo_url="https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-${_geo_name}.srs"
+                    _add_ruleset_if_missing "$geo_tag" "$geo_url" "binary"
+                    rule=$(echo "$rule" | jq --arg rs "$geo_tag" \
+                        'if .rule_set then .rule_set += [$rs] else . + {rule_set:[$rs]} end')
+                done
+                IFS="$IFS_OLD"
+                ;;
+            --geosite)
+                shift; [[ $# -gt 0 ]] || die "--geosite 需要参数 (如: google, cn, netflix, category-ads-all 等)"
+                local IFS_OLD="$IFS"; IFS=','
+                for _geo_name in $1; do
+                    IFS="$IFS_OLD"
+                    local geo_tag="geosite-${_geo_name}"
+                    local geo_url="https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-${_geo_name}.srs"
+                    _add_ruleset_if_missing "$geo_tag" "$geo_url" "binary"
+                    rule=$(echo "$rule" | jq --arg rs "$geo_tag" \
+                        'if .rule_set then .rule_set += [$rs] else . + {rule_set:[$rs]} end')
+                done
+                IFS="$IFS_OLD"
+                ;;
+            --ruleset)
+                shift; [[ $# -gt 0 ]] || die "--ruleset 需要参数"
+                local url="$1"
+                local rs_tag; rs_tag="rs-$(echo "$url" | md5sum | head -c 8)"
+                # 添加到 rulesets
+                local rs_exists
+                rs_exists=$(jq -r --arg u "$url" '[.[]|select(.url==$u)]|length' "$RULESETS_FILE")
+                if [[ "$rs_exists" -eq 0 ]]; then
+                    local fmt="binary"
+                    [[ "$url" == *.json ]] && fmt="source"
+                    local detour; detour=$(_get_download_detour)
+                    local rs_obj
+                    rs_obj=$(jq -n --arg tag "$rs_tag" --arg u "$url" --arg f "$fmt" --arg d "$detour" \
+                        '{type:"remote",tag:$tag,format:$f,url:$u,download_detour:$d}')
+                    local tmp; tmp=$(mktemp)
+                    jq --argjson o "$rs_obj" '. + [$o]' "$RULESETS_FILE" > "$tmp" && mv "$tmp" "$RULESETS_FILE"
+                else
+                    rs_tag=$(jq -r --arg u "$url" '.[]|select(.url==$u)|.tag' "$RULESETS_FILE")
+                fi
+                rule=$(echo "$rule" | jq --arg rs "$rs_tag" \
+                    'if .rule_set then .rule_set += [$rs] else . + {rule_set:[$rs]} end')
+                ;;
+            *) die "未知路由参数: $1" ;;
+        esac
         shift
     done
 
-    _jq_write "$ROUTES_FILE" --argjson r "$rule" '. + [$r]'
+    local tmp; tmp=$(mktemp)
+    jq --argjson r "$rule" '. + [$r]' "$ROUTES_FILE" > "$tmp" && mv "$tmp" "$ROUTES_FILE"
     info "已添加路由规则 → $outbound"
     echo "$rule" | jq '.'
 }
@@ -504,24 +570,32 @@ route_del() {
     local idx="$1"
     local count; count=$(jq 'length' "$ROUTES_FILE")
     [[ "$idx" -ge 1 && "$idx" -le "$count" ]] 2>/dev/null || die "索引超出范围 (1-$count)"
-    _jq_write "$ROUTES_FILE" --argjson i "$((idx-1))" 'del(.[$i])'
+    local tmp; tmp=$(mktemp)
+    jq --argjson i "$((idx-1))" 'del(.[$i])' "$ROUTES_FILE" > "$tmp" && mv "$tmp" "$ROUTES_FILE"
     info "已删除路由规则 #$idx"
 }
 
 route_default() {
     [[ $# -ge 1 ]] || die "用法: sbroute route default <outbound_tag>"
-    _jq_write "$SETTINGS_FILE" --arg t "$1" '.default_outbound=$t'
-    info "默认出站已设置为: $1"
+    local tag="$1" tmp
+    tmp=$(mktemp)
+    jq --arg t "$tag" '.default_outbound=$t' "$SETTINGS_FILE" > "$tmp" && mv "$tmp" "$SETTINGS_FILE"
+    info "默认出站已设置为: $tag"
 }
 
 # ==================== DNS 模块 ====================
 cmd_dns() {
     local mode="${1:-}"
     case "$mode" in
-        basic|split)
-            _jq_write "$SETTINGS_FILE" --arg m "$mode" '.dns_mode=$m'
-            local -A desc=([basic]="基础 (Google DNS 8.8.8.8)" [split]="国内分流 (AliDNS + Google DNS)")
-            info "DNS 模式: ${desc[$mode]}"
+        basic)
+            local tmp; tmp=$(mktemp)
+            jq '.dns_mode="basic"' "$SETTINGS_FILE" > "$tmp" && mv "$tmp" "$SETTINGS_FILE"
+            info "DNS 模式: 基础 (Google DNS 8.8.8.8)"
+            ;;
+        split)
+            local tmp; tmp=$(mktemp)
+            jq '.dns_mode="split"' "$SETTINGS_FILE" > "$tmp" && mv "$tmp" "$SETTINGS_FILE"
+            info "DNS 模式: 国内分流 (AliDNS + Google DNS)"
             ;;
         *)
             echo "用法: sbroute dns <basic|split>"
@@ -590,18 +664,25 @@ _get_download_detour() {
 
 _add_ruleset_if_missing() {
     local tag="$1" url="$2" fmt="$3"
-    local exists; exists=$(jq -r --arg t "$tag" '[.[]|select(.tag==$t)]|length' "$RULESETS_FILE")
+    local exists
+    exists=$(jq -r --arg t "$tag" '[.[]|select(.tag==$t)]|length' "$RULESETS_FILE")
     if [[ "$exists" -eq 0 ]]; then
-        local obj; obj=$(jq -n --arg t "$tag" --arg u "$url" --arg f "$fmt" \
-            --arg d "$(_get_download_detour)" '{type:"remote",tag:$t,format:$f,url:$u,download_detour:$d}')
-        _jq_write "$RULESETS_FILE" --argjson o "$obj" '. + [$o]'
+        local detour; detour=$(_get_download_detour)
+        local obj; obj=$(jq -n --arg t "$tag" --arg u "$url" --arg f "$fmt" --arg d "$detour" \
+            '{type:"remote",tag:$t,format:$f,url:$u,download_detour:$d}')
+        local tmp; tmp=$(mktemp)
+        jq --argjson o "$obj" '. + [$o]' "$RULESETS_FILE" > "$tmp" && mv "$tmp" "$RULESETS_FILE"
     fi
 }
 
 _add_route_if_missing() {
     local rule="$1" check_key="$2"
-    local exists; exists=$(jq -r --arg k "$check_key" '[.[]|select(.rule_set? and (.rule_set[]|select(.==$k)))]|length' "$ROUTES_FILE")
-    [[ "$exists" -eq 0 ]] && _jq_write "$ROUTES_FILE" --argjson r "$rule" '. + [$r]'
+    local exists
+    exists=$(jq -r --arg k "$check_key" '[.[]|select(.rule_set? and (.rule_set[]|select(.==$k)))]|length' "$ROUTES_FILE")
+    if [[ "$exists" -eq 0 ]]; then
+        local tmp; tmp=$(mktemp)
+        jq --argjson r "$rule" '. + [$r]' "$ROUTES_FILE" > "$tmp" && mv "$tmp" "$ROUTES_FILE"
+    fi
 }
 
 # ==================== 配置生成 ====================
@@ -612,24 +693,42 @@ generate_config() {
     default_out=$(jq -r '.default_outbound // "direct"' "$SETTINGS_FILE")
     tun_enabled=$(jq -r '.tun_enabled // true' "$SETTINGS_FILE")
 
-    # DNS 基础配置，split 模式额外加 rules
     local dns_config
-    dns_config=$(jq -n '{
-        servers:[
-            {tag:"google-dns",type:"tls",server:"8.8.8.8"},
-            {tag:"google-dns6",type:"tls",server:"2001:4860:4860::8888"},
-            {tag:"ali-dns",type:"udp",server:"223.5.5.5"},
-            {tag:"ali-dns6",type:"udp",server:"2400:3200::1"}
-        ],
-        strategy:"prefer_ipv4"
-    }')
-    [[ "$dns_mode" == "split" ]] && dns_config=$(echo "$dns_config" | jq '. + {rules:[{rule_set:["geosite-cn"],server:"ali-dns"}]}')
+    case "$dns_mode" in
+        split)
+            dns_config=$(cat <<'EDNS'
+{
+  "servers": [
+    {"tag":"google-dns","type":"tls","server":"8.8.8.8"},
+    {"tag":"ali-dns","type":"udp","server":"223.5.5.5"}
+  ],
+  "rules": [
+    {"rule_set":["geosite-cn"],"server":"ali-dns"}
+  ],
+  "strategy":"ipv4_only"
+}
+EDNS
+)
+            ;;
+        *)
+            dns_config=$(cat <<'EDNS'
+{
+  "servers": [
+    {"tag":"google-dns","type":"tls","server":"8.8.8.8"},
+    {"tag":"ali-dns","type":"udp","server":"223.5.5.5"}
+  ],
+  "strategy":"ipv4_only"
+}
+EDNS
+)
+            ;;
+    esac
 
     # 构建入站
     local inbounds='[]'
     if [[ "$tun_enabled" == "true" ]]; then
         inbounds=$(cat <<'EINB'
-[{"type":"tun","tag":"tun-in","address":["172.19.0.1/30","fdfe:dcba:9876::1/126"],"auto_route":true,"strict_route":true}]
+[{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"],"auto_route":true,"strict_route":true}]
 EINB
 )
     fi
@@ -736,8 +835,12 @@ cmd_restore() {
 }
 
 cmd_export() {
-    [[ -f "$SINGBOX_CONFIG" ]] || generate_config
-    jq '.' "$SINGBOX_CONFIG"
+    if [[ -f "$SINGBOX_CONFIG" ]]; then
+        jq '.' "$SINGBOX_CONFIG"
+    else
+        generate_config
+        jq '.' "$SINGBOX_CONFIG"
+    fi
 }
 
 cmd_import() {
@@ -821,44 +924,51 @@ interactive_menu() {
         echo -e "${BOLD}${CYAN}║   SBRoute — VPS 流量分流管理 v${VERSION}  ║${NC}"
         echo -e "${BOLD}${CYAN}╚══════════════════════════════════════╝${NC}"
         echo ""
-        echo -e "  ${GREEN}1)${NC} 安装 sing-box"
-        echo -e "  ${GREEN}2)${NC} 添加出站"
-        echo -e "  ${GREEN}3)${NC} 查看出站列表"
-        echo -e "  ${GREEN}4)${NC} 删除出站"
-        echo -e "  ${GREEN}5)${NC} 添加路由规则"
-        echo -e "  ${GREEN}6)${NC} 查看路由规则"
-        echo -e "  ${GREEN}7)${NC} 删除路由规则"
-        echo -e "  ${GREEN}8)${NC} 设置默认出站"
-        echo -e "  ${GREEN}9)${NC} DNS 设置"
-        echo -e "  ${GREEN}10)${NC} 应用预设模板"
-        echo -e "  ${GREEN}11)${NC} 应用配置并重启"
-        echo -e "  ${GREEN}12)${NC} 备份配置"
-        echo -e "  ${GREEN}13)${NC} 恢复配置"
-        echo -e "  ${GREEN}14)${NC} 导出配置 (JSON)"
-        echo -e "  ${GREEN}15)${NC} 导入配置 (JSON)"
-        echo -e "  ${GREEN}16)${NC} 查看 sing-box 状态"
+        echo -e "  ${BOLD}${YELLOW}▸ 出站管理${NC}"
+        echo -e "  ${GREEN}1)${NC} 添加出站"
+        echo -e "  ${GREEN}2)${NC} 查看出站列表"
+        echo -e "  ${GREEN}3)${NC} 删除出站"
+        echo ""
+        echo -e "  ${BOLD}${YELLOW}▸ 路由规则${NC}"
+        echo -e "  ${GREEN}4)${NC} 添加路由规则"
+        echo -e "  ${GREEN}5)${NC} 查看路由规则"
+        echo -e "  ${GREEN}6)${NC} 删除路由规则"
+        echo -e "  ${GREEN}7)${NC} 设置默认出站"
+        echo ""
+        echo -e "  ${BOLD}${YELLOW}▸ 备份与配置${NC}"
+        echo -e "  ${GREEN}8)${NC} 备份配置"
+        echo -e "  ${GREEN}9)${NC} 恢复配置"
+        echo -e "  ${GREEN}10)${NC} 导出配置 (JSON)"
+        echo -e "  ${GREEN}11)${NC} 导入配置 (JSON)"
+        echo ""
+        echo -e "  ${BOLD}${YELLOW}▸ 系统管理${NC}"
+        echo -e "  ${GREEN}12)${NC} 安装 sing-box"
+        echo -e "  ${GREEN}13)${NC} DNS 设置"
+        echo -e "  ${GREEN}14)${NC} 应用预设模板"
+        echo -e "  ${GREEN}15)${NC} 应用配置并重启"
+        echo -e "  ${GREEN}16)${NC} 查看状态"
         echo -e "  ${GREEN}17)${NC} 查看日志"
         echo -e "  ${GREEN}18)${NC} 卸载"
-        echo -e "  ${GREEN}0)${NC} 退出"
+        echo -e "  ${GREEN}0)${NC}  退出"
         echo ""
         read -rp "请选择 [0-18]: " choice
 
         case "$choice" in
-            1) cmd_install ;;
-            2) _menu_add_outbound ;;
-            3) out_list ;;
-            4) _menu_del_outbound ;;
-            5) _menu_add_route ;;
-            6) route_list ;;
-            7) _menu_del_route ;;
-            8) _menu_set_default ;;
-            9) _menu_dns ;;
-            10) _menu_preset ;;
-            11) cmd_apply ;;
-            12) cmd_backup ;;
-            13) _menu_restore ;;
-            14) cmd_export ;;
-            15) _menu_import ;;
+            1) _menu_add_outbound ;;
+            2) out_list ;;
+            3) _menu_del_outbound ;;
+            4) _menu_add_route ;;
+            5) route_list ;;
+            6) _menu_del_route ;;
+            7) _menu_set_default ;;
+            8) cmd_backup ;;
+            9) _menu_restore ;;
+            10) cmd_export ;;
+            11) _menu_import ;;
+            12) cmd_install ;;
+            13) _menu_dns ;;
+            14) _menu_preset ;;
+            15) cmd_apply ;;
             16) cmd_status ;;
             17) cmd_log ;;
             18) cmd_uninstall ;;
@@ -873,47 +983,51 @@ interactive_menu() {
 _menu_add_outbound() {
     echo ""
     echo -e "  出站类型:"
-    echo -e "  ${CYAN}1)${NC} Shadowsocks (ss)"
-    echo -e "  ${CYAN}2)${NC} SOCKS5"
-    echo -e "  ${CYAN}3)${NC} HTTP"
-    echo -e "  ${CYAN}4)${NC} VLESS"
-    echo -e "  ${CYAN}5)${NC} VMess"
-    echo -e "  ${CYAN}6)${NC} Direct"
-    echo -e "  ${CYAN}7)${NC} Block"
-    echo -e "  ${CYAN}8)${NC} 粘贴分享链接 (ss:// / vless://)"
+    echo -e "  ${CYAN}1)${NC} 粘贴分享链接 (ss:// / vless://)"
+    echo -e "  ${CYAN}2)${NC} Shadowsocks (ss)"
+    echo -e "  ${CYAN}3)${NC} SOCKS5"
+    echo -e "  ${CYAN}4)${NC} HTTP"
+    echo -e "  ${CYAN}5)${NC} VLESS"
+    echo -e "  ${CYAN}6)${NC} VMess"
+    echo -e "  ${CYAN}7)${NC} Direct"
+    echo -e "  ${CYAN}8)${NC} Block"
     echo ""
     read -rp "选择类型 [1-8]: " t
     case "$t" in
         1)
+            echo -e "  粘贴分享链接 (支持 ss:// 和 vless://):"
+            read -rp "  链接: " share_url
+            [[ -n "$share_url" ]] && out_add_url "$share_url"
+            ;;
+        2)
             read -rp "Tag: " tag; read -rp "Server: " srv; read -rp "Port: " port
             read -rp "Method (aes-128-gcm): " method; method=${method:-aes-128-gcm}
             read -rp "Password: " pw
             out_add_ss "$tag" "$srv" "$port" "$method" "$pw"
             ;;
-        2|3)
-            local ptype; [[ "$t" == 2 ]] && ptype=socks || ptype=http
+        3)
             read -rp "Tag: " tag; read -rp "Server: " srv; read -rp "Port: " port
             read -rp "User (可选): " user; read -rp "Password (可选): " pw
-            _out_add_proxy "$ptype" "$tag" "$srv" "$port" "$user" "$pw"
+            out_add_socks "$tag" "$srv" "$port" "$user" "$pw"
             ;;
         4)
+            read -rp "Tag: " tag; read -rp "Server: " srv; read -rp "Port: " port
+            read -rp "User (可选): " user; read -rp "Password (可选): " pw
+            out_add_http "$tag" "$srv" "$port" "$user" "$pw"
+            ;;
+        5)
             read -rp "Tag: " tag; read -rp "Server: " srv; read -rp "Port: " port
             read -rp "UUID: " uuid; read -rp "Flow (可选, 如 xtls-rprx-vision): " flow
             read -rp "SNI (可选, 启用 TLS+Reality): " sni
             out_add_vless "$tag" "$srv" "$port" "$uuid" "$flow" "$sni"
             ;;
-        5)
+        6)
             read -rp "Tag: " tag; read -rp "Server: " srv; read -rp "Port: " port
             read -rp "UUID: " uuid; read -rp "Security (auto): " sec; sec=${sec:-auto}
             out_add_vmess "$tag" "$srv" "$port" "$uuid" "$sec"
             ;;
-        6) read -rp "Tag (direct): " tag; out_add_simple "direct" "${tag:-direct}" ;;
-        7) read -rp "Tag (block): " tag; out_add_simple "block" "${tag:-block}" ;;
-        8)
-            echo -e "  粘贴分享链接 (支持 ss:// 和 vless://):"
-            read -rp "  链接: " share_url
-            [[ -n "$share_url" ]] && out_add_url "$share_url"
-            ;;
+        7) read -rp "Tag (direct): " tag; out_add_simple "direct" "${tag:-direct}" ;;
+        8) read -rp "Tag (block): " tag; out_add_simple "block" "${tag:-block}" ;;
         *) warn "无效选择" ;;
     esac
 }
@@ -935,12 +1049,16 @@ _menu_add_route() {
     read -rp "  Domain (逗号分隔): " domains
     read -rp "  Domain Suffix (逗号分隔): " suffixes
     read -rp "  Domain Keyword (逗号分隔): " keywords
-    read -rp "  Rule Set URL: " ruleset
+    read -rp "  GeoIP (逗号分隔, 如 cn,us,jp): " geoip
+    read -rp "  GeoSite (逗号分隔, 如 google,cn,netflix): " geosite
+    read -rp "  Rule Set URL (完整链接): " ruleset
 
     local args=("$out_tag")
     [[ -n "$domains" ]]  && args+=(--domain "$domains")
     [[ -n "$suffixes" ]] && args+=(--suffix "$suffixes")
     [[ -n "$keywords" ]] && args+=(--keyword "$keywords")
+    [[ -n "$geoip" ]]    && args+=(--geoip "$geoip")
+    [[ -n "$geosite" ]]  && args+=(--geosite "$geosite")
     [[ -n "$ruleset" ]]  && args+=(--ruleset "$ruleset")
 
     if [[ ${#args[@]} -le 1 ]]; then
@@ -1027,7 +1145,10 @@ ${BOLD}出站管理:${NC}
   sbroute out show <tag>               查看出站详情
 
 ${BOLD}路由规则:${NC}
-  sbroute route add <tag> --domain/--suffix/--keyword/--regex/--ip-cidr/--port/--process/--ruleset <v>
+  sbroute route add <tag> --domain/--suffix/--keyword/--regex/--ip-cidr/--port/--process <v>
+  sbroute route add <tag> --geoip <codes>        GeoIP 规则集 (如 cn,us,jp)
+  sbroute route add <tag> --geosite <names>      GeoSite 规则集 (如 google,cn,netflix,category-ads-all)
+  sbroute route add <tag> --ruleset <url>        自定义规则集 URL
   sbroute route list                   列出路由规则
   sbroute route del <index>            删除路由规则
   sbroute route default <tag>          设置默认出站
