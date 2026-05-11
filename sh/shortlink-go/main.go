@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"math/big"
 	"net"
@@ -639,6 +640,130 @@ func handleBatchDelete(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]interface{}{"success": true, "message": fmt.Sprintf("已删除 %d 条", len(req.IDs))})
 }
 
+// ---------- 导出备份 ----------
+
+type ExportData struct {
+	Version    string           `json:"version"`
+	ExportTime string           `json:"export_time"`
+	Count      int              `json:"count"`
+	Links      []ExportLink     `json:"links"`
+}
+
+type ExportLink struct {
+	Key       string `json:"key"`
+	URL       string `json:"url"`
+	Note      string `json:"note,omitempty"`
+	GroupName string `json:"group_name,omitempty"`
+	Tags      string `json:"tags,omitempty"`
+	CreatedAt string `json:"created_at"`
+	Visits    int    `json:"visits"`
+}
+
+func handleExport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := getSession(r); !ok {
+		http.Redirect(w, r, "/admin/login", http.StatusFound)
+		return
+	}
+
+	rows, err := db.Query("SELECT key, url, COALESCE(note,''), COALESCE(group_name,''), COALESCE(tags,''), created_at, visits FROM shortlinks ORDER BY created_at ASC")
+	if err != nil {
+		http.Error(w, "导出失败", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var links []ExportLink
+	for rows.Next() {
+		var l ExportLink
+		rows.Scan(&l.Key, &l.URL, &l.Note, &l.GroupName, &l.Tags, &l.CreatedAt, &l.Visits)
+		links = append(links, l)
+	}
+
+	data := ExportData{
+		Version:    "1.0",
+		ExportTime: time.Now().Format("2006-01-02 15:04:05"),
+		Count:      len(links),
+		Links:      links,
+	}
+
+	filename := fmt.Sprintf("shortlinks_backup_%s.json", time.Now().Format("20060102_150405"))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.Encode(data)
+}
+
+// ---------- 导入备份 ----------
+
+func handleImport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := getSession(r); !ok {
+		jsonResponse(w, map[string]interface{}{"success": false, "message": "未登录"})
+		return
+	}
+
+	// 限制上传大小 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		jsonResponse(w, map[string]interface{}{"success": false, "message": "请选择备份文件"})
+		return
+	}
+	defer file.Close()
+
+	body, err := io.ReadAll(file)
+	if err != nil {
+		jsonResponse(w, map[string]interface{}{"success": false, "message": "读取文件失败"})
+		return
+	}
+
+	var data ExportData
+	if err := json.Unmarshal(body, &data); err != nil {
+		jsonResponse(w, map[string]interface{}{"success": false, "message": "文件格式错误，请使用导出的JSON文件"})
+		return
+	}
+
+	if len(data.Links) == 0 {
+		jsonResponse(w, map[string]interface{}{"success": false, "message": "备份文件中没有数据"})
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		jsonResponse(w, map[string]interface{}{"success": false, "message": "数据库操作失败"})
+		return
+	}
+
+	stmt, _ := tx.Prepare("INSERT OR IGNORE INTO shortlinks (key, url, note, group_name, tags, created_at, visits) VALUES (?, ?, ?, ?, ?, ?, ?)")
+	defer stmt.Close()
+
+	imported := 0
+	skipped := 0
+	for _, l := range data.Links {
+		result, err := stmt.Exec(l.Key, l.URL, l.Note, l.GroupName, l.Tags, l.CreatedAt, l.Visits)
+		if err != nil {
+			skipped++
+			continue
+		}
+		rows, _ := result.RowsAffected()
+		if rows > 0 {
+			imported++
+		} else {
+			skipped++
+		}
+	}
+	tx.Commit()
+
+	msg := fmt.Sprintf("导入完成！成功 %d 条", imported)
+	if skipped > 0 {
+		msg += fmt.Sprintf("，跳过 %d 条（key已存在）", skipped)
+	}
+	setFlash(w, "success", msg)
+	jsonResponse(w, map[string]interface{}{"success": true, "message": msg, "imported": imported, "skipped": skipped})
+}
+
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"status":"healthy","database":"%s"}`, cfg.DatabasePath)
@@ -664,6 +789,8 @@ func main() {
 	mux.HandleFunc("/admin/add", handleAdd)
 	mux.HandleFunc("/admin/delete/", handleDelete)
 	mux.HandleFunc("/admin/batch-delete", handleBatchDelete)
+	mux.HandleFunc("/admin/export", handleExport)
+	mux.HandleFunc("/admin/import", handleImport)
 	mux.HandleFunc("/admin", handleDashboard)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/", handleIndex)
