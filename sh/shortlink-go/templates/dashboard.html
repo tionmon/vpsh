@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短链系统 - 管理面板</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .header { background: white; padding: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
+        .logo { font-size: 20px; font-weight: bold; color: #333; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .logout-btn { color: #dc3545; text-decoration: none; }
+        .logout-btn:hover { text-decoration: underline; }
+        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+
+        /* 添加表单 */
+        .add-form { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .add-form h2 { margin-bottom: 20px; color: #333; }
+        .form-row { display: flex; gap: 15px; align-items: end; flex-wrap: wrap; }
+        .form-group { flex: 1; min-width: 150px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; font-size: 14px; }
+        input[type="text"], input[type="password"], input[type="url"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input[type="text"]:focus, input[type="password"]:focus, input[type="url"]:focus { outline: none; border-color: #007bff; }
+        select { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background: white; }
+        select:focus { outline: none; border-color: #007bff; }
+
+        /* 按钮 */
+        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; font-size: 14px; }
+        .btn:hover { background: #0056b3; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+        .btn-outline { background: transparent; border: 1px solid #ddd; color: #555; }
+        .btn-outline:hover { background: #f8f9fa; border-color: #aaa; }
+
+        /* 筛选栏 */
+        .filter-bar { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .filter-bar label { font-size: 14px; color: #555; font-weight: 500; }
+        .filter-bar select { min-width: 140px; }
+        .filter-active { color: #007bff; font-size: 13px; }
+
+        /* 表格 */
+        .table-container { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+        .table-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .table-header h2 { color: #333; }
+        .batch-actions { display: flex; gap: 10px; align-items: center; }
+        .batch-actions .selected-count { font-size: 14px; color: #666; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+        th { background: #f8f9fa; font-weight: 600; color: #555; }
+        .shortlink-key { font-family: monospace; color: #007bff; font-weight: 500; }
+        .copy-url { color: #666; cursor: pointer; transition: color 0.2s; font-size: 12px; }
+        .copy-url:hover { color: #007bff; text-decoration: underline; }
+        .shortlink-url { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .shortlink-note { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 13px; }
+        .visits { text-align: center; color: #666; }
+        .actions { text-align: center; white-space: nowrap; }
+        .alert { padding: 12px; margin-bottom: 20px; border-radius: 4px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #666; }
+        .checkbox-col { width: 40px; text-align: center; }
+        input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+        /* 分组标签 */
+        .group-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; background: #e8f4fd; color: #0969da; font-weight: 500; }
+        .tag-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 11px; background: #f0f0f0; color: #555; margin: 1px 2px; cursor: pointer; transition: background 0.2s; }
+        .tag-badge:hover { background: #ddd; }
+        .tags-cell { max-width: 150px; }
+        .group-cell { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">短链管理系统</div>
+            <div class="user-info">
+                <span>欢迎，{{.Username}}</span>
+                <a href="/admin/logout" class="logout-btn">退出登录</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        {{if .Flash}}
+            <div class="alert alert-{{.Flash.Category}}">
+                {{.Flash.Message}}
+            </div>
+        {{end}}
+
+        <div class="add-form">
+            <h2>添加新短链</h2>
+            <form id="addForm">
+                <div class="form-row">
+                    <div class="form-group" style="flex:2; min-width:200px;">
+                        <label for="url">目标URL</label>
+                        <input type="url" id="url" name="url" placeholder="https://www.example.com" required>
+                    </div>
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="key">短链Key（可选）</label>
+                        <input type="text" id="key" name="key" placeholder="留空自动生成">
+                    </div>
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="note">备注（可选）</label>
+                        <input type="text" id="note" name="note" placeholder="用途说明">
+                    </div>
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="group_name">分组（可选）</label>
+                        <input type="text" id="group_name" name="group_name" placeholder="如：工作、个人" list="groupList">
+                        <datalist id="groupList">
+                            {{range .Groups}}
+                            <option value="{{.}}">
+                            {{end}}
+                        </datalist>
+                    </div>
+                    <div class="form-group" style="flex:1; min-width:120px;">
+                        <label for="tags">标签（可选）</label>
+                        <input type="text" id="tags" name="tags" placeholder="逗号分隔，如：推广,活动">
+                    </div>
+                    <button type="submit" class="btn">添加</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+            <label>筛选：</label>
+            <select id="filterGroup" onchange="applyFilter()">
+                <option value="">全部分组</option>
+                {{range .Groups}}
+                <option value="{{.}}" {{if eq . $.FilterGroup}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+            <select id="filterTag" onchange="applyFilter()">
+                <option value="">全部标签</option>
+                {{range .AllTags}}
+                <option value="{{.}}" {{if eq . $.FilterTag}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+            {{if or .FilterGroup .FilterTag}}
+            <a href="/admin" class="btn btn-outline btn-sm">清除筛选</a>
+            <span class="filter-active">
+                {{if .FilterGroup}}分组: {{.FilterGroup}} {{end}}
+                {{if .FilterTag}}标签: {{.FilterTag}}{{end}}
+            </span>
+            {{end}}
+        </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <h2>短链列表 ({{.Count}} 条)</h2>
+                <div class="batch-actions">
+                    <span class="selected-count" id="selectedCount"></span>
+                    <button class="btn btn-danger btn-sm" id="batchDeleteBtn" style="display:none;" onclick="batchDelete()">批量删除</button>
+                </div>
+            </div>
+            {{if .Shortlinks}}
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="checkbox-col"><input type="checkbox" id="selectAll" title="全选"></th>
+                            <th>短链Key</th>
+                            <th>目标URL</th>
+                            <th>备注</th>
+                            <th>分组</th>
+                            <th>标签</th>
+                            <th>访问</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Shortlinks}}
+                        <tr>
+                            <td class="checkbox-col"><input type="checkbox" class="row-checkbox" value="{{.ID}}"></td>
+                            <td>
+                                <span class="shortlink-key">{{.Key}}</span>
+                                <br>
+                                <small class="copy-url" data-url="{{$.HostURL}}{{.Key}}" title="点击复制">
+                                    {{$.HostURL}}{{.Key}}
+                                </small>
+                            </td>
+                            <td class="shortlink-url" title="{{.URL}}">{{.URL}}</td>
+                            <td class="shortlink-note" title="{{.Note}}">{{.Note}}</td>
+                            <td class="group-cell">
+                                {{if .GroupName}}<span class="group-badge" onclick="filterByGroup('{{.GroupName}}')">{{.GroupName}}</span>{{end}}
+                            </td>
+                            <td class="tags-cell">
+                                {{range .TagList}}<span class="tag-badge" onclick="filterByTag('{{.}}')">{{.}}</span>{{end}}
+                            </td>
+                            <td class="visits">{{.Visits}}</td>
+                            <td>{{.CreatedAt}}</td>
+                            <td class="actions">
+                                <button class="btn btn-danger btn-sm" onclick="deleteLink({{.ID}})">删除</button>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            {{else}}
+                <div class="empty-state">
+                    <p>暂无短链，请添加第一个短链</p>
+                </div>
+            {{end}}
+        </div>
+    </div>
+
+    <script>
+        // 筛选
+        function applyFilter() {
+            const group = document.getElementById('filterGroup').value;
+            const tag = document.getElementById('filterTag').value;
+            const params = new URLSearchParams();
+            if (group) params.set('group', group);
+            if (tag) params.set('tag', tag);
+            const qs = params.toString();
+            window.location.href = '/admin' + (qs ? '?' + qs : '');
+        }
+
+        function filterByGroup(g) {
+            document.getElementById('filterGroup').value = g;
+            applyFilter();
+        }
+
+        function filterByTag(t) {
+            document.getElementById('filterTag').value = t;
+            applyFilter();
+        }
+
+        // 复制到剪贴板
+        document.addEventListener('click', async function(e) {
+            if (e.target.classList.contains('copy-url')) {
+                const url = e.target.getAttribute('data-url');
+                const element = e.target;
+                try {
+                    await navigator.clipboard.writeText(url);
+                    const originalText = element.textContent;
+                    element.textContent = '已复制!';
+                    element.style.color = '#28a745';
+                    setTimeout(() => {
+                        element.textContent = originalText;
+                        element.style.color = '#666';
+                    }, 1500);
+                } catch (err) {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = url;
+                    textArea.style.position = 'fixed';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    const originalText = element.textContent;
+                    element.textContent = '已复制!';
+                    element.style.color = '#28a745';
+                    setTimeout(() => {
+                        element.textContent = originalText;
+                        element.style.color = '#666';
+                    }, 1500);
+                }
+            }
+        });
+
+        // 全选
+        const selectAllBox = document.getElementById('selectAll');
+        if (selectAllBox) {
+            selectAllBox.addEventListener('change', function() {
+                document.querySelectorAll('.row-checkbox').forEach(cb => { cb.checked = this.checked; });
+                updateBatchUI();
+            });
+        }
+
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('row-checkbox')) updateBatchUI();
+        });
+
+        function getSelectedIds() {
+            return Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => parseInt(cb.value));
+        }
+
+        function updateBatchUI() {
+            const ids = getSelectedIds();
+            const countEl = document.getElementById('selectedCount');
+            const btnEl = document.getElementById('batchDeleteBtn');
+            if (ids.length > 0) {
+                countEl.textContent = '已选 ' + ids.length + ' 条';
+                btnEl.style.display = 'inline-block';
+            } else {
+                countEl.textContent = '';
+                btnEl.style.display = 'none';
+            }
+            const allBoxes = document.querySelectorAll('.row-checkbox');
+            if (selectAllBox && allBoxes.length > 0) {
+                selectAllBox.checked = ids.length === allBoxes.length;
+            }
+        }
+
+        // 添加短链
+        document.getElementById('addForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            try {
+                const response = await fetch('/admin/add', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert('错误：' + result.message);
+                }
+            } catch (error) {
+                alert('添加失败，请重试');
+            }
+        });
+
+        // 删除单条
+        async function deleteLink(id) {
+            if (!confirm('确定要删除这个短链吗？')) return;
+            try {
+                const response = await fetch('/admin/delete/' + id, { method: 'POST' });
+                const result = await response.json();
+                if (result.success) { location.reload(); }
+                else { alert('删除失败：' + result.message); }
+            } catch (error) { alert('删除失败，请重试'); }
+        }
+
+        // 批量删除
+        async function batchDelete() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) return;
+            if (!confirm('确定要删除选中的 ' + ids.length + ' 条短链吗？')) return;
+            try {
+                const response = await fetch('/admin/batch-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: ids })
+                });
+                const result = await response.json();
+                if (result.success) { location.reload(); }
+                else { alert('批量删除失败：' + result.message); }
+            } catch (error) { alert('批量删除失败，请重试'); }
+        }
+    </script>
+</body>
+</html>
