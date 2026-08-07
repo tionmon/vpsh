@@ -39,7 +39,7 @@ echo "======================================"
 echo ""
 
 # ==================== Step 1: 安装 sing-box ====================
-echo "[1/4] 正在安装 sing-box ..."
+echo "[1/5] 正在安装 sing-box ..."
 
 # 下载安装脚本
 TMP_INSTALL=$(mktemp /tmp/sb_install_XXXXXX.sh)
@@ -63,34 +63,43 @@ if ! command -v sb &>/dev/null; then
     exit 1
 fi
 
-echo "[1/4] ✅ sing-box 安装完成"
+echo "[1/5] ✅ sing-box 安装完成"
 echo ""
 
 # ==================== Step 2: 添加 Shadowsocks ====================
-echo "[2/4] 正在添加 Shadowsocks (端口 19015, aes-128-gcm) ..."
+echo "[2/5] 正在添加 Shadowsocks (端口 19015, aes-128-gcm) ..."
 
 sb a ss 19015 "$UUID" aes-128-gcm
 sleep 1
 
-echo "[2/4] ✅ Shadowsocks 添加完成"
+echo "[2/5] ✅ Shadowsocks 添加完成"
 echo ""
 
 # ==================== Step 3: 添加 VLESS Reality ====================
-echo "[3/4] 正在添加 VLESS Reality (端口 19013, SNI: www.tesla.com) ..."
+echo "[3/5] 正在添加 VLESS Reality (端口 19013, SNI: www.tesla.com) ..."
 
 sb a r 19013 "$UUID" www.tesla.com
 sleep 1
 
-echo "[3/4] ✅ VLESS Reality 添加完成"
+echo "[3/5] ✅ VLESS Reality 添加完成"
 echo ""
 
-# ==================== Step 4: 更换 Reality 密钥 ====================
-echo "[4/4] 正在更换 VLESS-REALITY-19013 密钥 ..."
+# ==================== Step 4: 添加 SOCKS ====================
+echo "[4/5] 正在添加 SOCKS (端口 19014) ..."
+
+sb a socks 19014 "$PRIVATE_KEY" "$PUBLIC_KEY"
+sleep 1
+
+echo "[4/5] ✅ SOCKS 添加完成"
+echo ""
+
+# ==================== Step 5: 更换 Reality 密钥 ====================
+echo "[5/5] 正在更换 VLESS-REALITY-19013 密钥 ..."
 
 sb change VLESS-REALITY-19013 key "$PRIVATE_KEY" "$PUBLIC_KEY"
 sleep 1
 
-echo "[4/4] ✅ 密钥更换完成"
+echo "[5/5] ✅ 密钥更换完成"
 echo ""
 
 # ==================== 完成 ====================
@@ -101,6 +110,7 @@ echo ""
 echo "已配置的服务:"
 echo "  • Shadowsocks    - 端口 19015 (aes-128-gcm)"
 echo "  • VLESS Reality  - 端口 19013 (www.tesla.com)"
+echo "  • SOCKS          - 端口 19014"
 echo ""
 echo "管理命令:"
 echo "  sb         - 查看管理菜单"
