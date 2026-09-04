@@ -1,7 +1,7 @@
 #!/bin/bash
 # Codex配置脚本
-# 运行方式：curl -s https://your-domain.tld/setup-codex.sh | bash -s -- --url https://your-domain.tld --key YOUR_KEY
-# 或保存并运行：./setup-codex.sh --url https://your-domain.tld --key YOUR_KEY
+# 默认方案：./setup-codex.sh --url https://your-domain.tld --key YOUR_KEY
+# 中国大陆：./setup-codex.sh --mirror cn --url https://your-domain.tld --key YOUR_KEY
 
 set -e
 set -o pipefail
@@ -44,33 +44,254 @@ run_as_admin() {
     fi
 }
 
+OFFICIAL_NODE_DIST_URL="https://nodejs.org/dist"
+CN_NODE_DIST_URL="https://npmmirror.com/mirrors/node"
+CN_NPM_REGISTRY="https://registry.npmmirror.com"
+
 get_latest_node_lts_major() {
     local releases
+    local source_url
+    local version
     local major
+    local sources=("$OFFICIAL_NODE_DIST_URL")
 
-    print_info "正在获取 Node.js 最新 LTS 版本信息..."
-    if ! releases=$(curl -fsSL https://nodejs.org/dist/index.json 2>/dev/null); then
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        sources=("$CN_NODE_DIST_URL" "$OFFICIAL_NODE_DIST_URL")
+    fi
+
+    releases=""
+    for source_url in "${sources[@]}"; do
+        print_info "正在获取 Node.js 最新 LTS 版本信息：$source_url"
+        if releases=$(curl -fsSL --connect-timeout 10 --max-time 60 --retry 2 \
+            "$source_url/index.json" 2>/dev/null); then
+            LATEST_NODE_DOWNLOAD_BASE="$source_url"
+            break
+        fi
+
+        if [ "$source_url" = "$CN_NODE_DIST_URL" ]; then
+            print_warning "国内 Node.js 镜像暂时不可用，正在回退到官方源..."
+        fi
+    done
+
+    if [ -z "$releases" ]; then
         print_error "获取 Node.js 最新 LTS 版本失败，请检查网络连接。"
         return 1
     fi
 
-    major=$(printf '%s' "$releases" | awk '
+    version=$(awk '
         BEGIN { RS = "}," }
         $0 ~ /"lts":[[:space:]]*("[^"]+"|true)/ {
             version = $0
-            sub(/^.*"version":"v/, "", version)
-            sub(/\..*$/, "", version)
+            sub(/^.*"version":[[:space:]]*"v/, "", version)
+            sub(/".*$/, "", version)
             print version
             exit
         }
-    ')
+    ' <<< "$releases")
 
-    if [ -z "$major" ]; then
-        print_error "未能识别 Node.js 最新 LTS 主版本。"
+    if [ -z "$version" ]; then
+        print_error "未能识别 Node.js 最新 LTS 版本。"
         return 1
     fi
 
+    major="${version%%.*}"
+    LATEST_NODE_LTS_VERSION="$version"
     LATEST_NODE_LTS_MAJOR="$major"
+}
+
+get_shell_config_path() {
+    local shell_name=""
+
+    if [ -n "$SHELL" ]; then
+        shell_name=$(basename "$SHELL")
+    elif [ -n "$BASH_VERSION" ]; then
+        shell_name="bash"
+    elif [ -n "$ZSH_VERSION" ]; then
+        shell_name="zsh"
+    elif [ -n "$FISH_VERSION" ]; then
+        shell_name="fish"
+    fi
+
+    case "$shell_name" in
+        bash)
+            DETECTED_SHELL_CONFIG="$HOME/.bashrc"
+            [ -f "$HOME/.bash_profile" ] && DETECTED_SHELL_CONFIG="$HOME/.bash_profile"
+            ;;
+        zsh)
+            DETECTED_SHELL_CONFIG="$HOME/.zshrc"
+            ;;
+        fish)
+            DETECTED_SHELL_CONFIG="$HOME/.config/fish/config.fish"
+            ;;
+        *)
+            DETECTED_SHELL_CONFIG="$HOME/.profile"
+            ;;
+    esac
+
+    DETECTED_SHELL_NAME="$shell_name"
+}
+
+persist_local_bin_path() {
+    local shell_config
+    local shell_name
+
+    export PATH="$HOME/.local/bin:$PATH"
+    get_shell_config_path
+    shell_config="$DETECTED_SHELL_CONFIG"
+    shell_name="$DETECTED_SHELL_NAME"
+    mkdir -p "$(dirname "$shell_config")"
+
+    if [ -f "$shell_config" ] && grep -Fq '$HOME/.local/bin' "$shell_config"; then
+        return 0
+    fi
+
+    if [ "$shell_name" = "fish" ]; then
+        printf '\n# Codex 本地命令路径\nset -gx PATH "$HOME/.local/bin" $PATH\n' >> "$shell_config"
+    else
+        printf '\n# Codex 本地命令路径\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$shell_config"
+    fi
+
+    print_info "已将 $HOME/.local/bin 加入 $shell_config"
+}
+
+install_nodejs_from_archive() {
+    local node_version="$LATEST_NODE_LTS_VERSION"
+    local os_type
+    local platform
+    local machine_arch
+    local node_arch
+    local archive_base
+    local archive_name
+    local temp_dir
+    local archive_file
+    local checksum_file
+    local download_base
+    local expected_checksum
+    local actual_checksum
+    local downloaded=false
+    local install_root="$HOME/.local/lib/nodejs"
+    local install_dir
+    local executable
+    local download_sources=("$LATEST_NODE_DOWNLOAD_BASE")
+
+    if [ "$LATEST_NODE_DOWNLOAD_BASE" != "$OFFICIAL_NODE_DIST_URL" ]; then
+        download_sources+=("$OFFICIAL_NODE_DIST_URL")
+    fi
+
+    if ! command -v tar &> /dev/null; then
+        print_warning "未找到 tar，无法从 Node.js 压缩包安装。"
+        return 1
+    fi
+
+    os_type=$(uname -s)
+    case "$os_type" in
+        Darwin) platform="darwin" ;;
+        Linux) platform="linux" ;;
+        *)
+            print_warning "国内镜像安装暂不支持当前系统：$os_type"
+            return 1
+            ;;
+    esac
+
+    machine_arch=$(uname -m)
+    case "$machine_arch" in
+        x86_64|amd64) node_arch="x64" ;;
+        arm64|aarch64) node_arch="arm64" ;;
+        armv7l) node_arch="armv7l" ;;
+        ppc64le) node_arch="ppc64le" ;;
+        s390x) node_arch="s390x" ;;
+        *)
+            print_warning "国内镜像安装暂不支持当前架构：$machine_arch"
+            return 1
+            ;;
+    esac
+
+    archive_base="node-v${node_version}-${platform}-${node_arch}"
+    archive_name="${archive_base}.tar.gz"
+    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/codex-node.XXXXXX")
+    archive_file="$temp_dir/$archive_name"
+    checksum_file="$temp_dir/SHASUMS256.txt"
+
+    for download_base in "${download_sources[@]}"; do
+        print_info "正在下载 Node.js v$node_version：$download_base"
+        rm -f "$archive_file" "$checksum_file"
+
+        if ! curl -fL --connect-timeout 10 --max-time 600 --retry 3 \
+            "$download_base/v$node_version/$archive_name" -o "$archive_file"; then
+            print_warning "Node.js 安装包下载失败：$download_base"
+            continue
+        fi
+
+        if ! curl -fsSL --connect-timeout 10 --max-time 60 --retry 2 \
+            "$download_base/v$node_version/SHASUMS256.txt" -o "$checksum_file"; then
+            print_warning "无法下载 Node.js 校验文件：$download_base"
+            continue
+        fi
+
+        expected_checksum=$(awk -v name="$archive_name" '$2 == name { print $1; exit }' "$checksum_file")
+        if [ -z "$expected_checksum" ]; then
+            print_warning "校验文件中未找到 $archive_name"
+            continue
+        fi
+
+        if command -v sha256sum &> /dev/null; then
+            actual_checksum=$(sha256sum "$archive_file" | awk '{print $1}')
+        elif command -v shasum &> /dev/null; then
+            actual_checksum=$(shasum -a 256 "$archive_file" | awk '{print $1}')
+        else
+            print_warning "未找到 SHA-256 校验工具，将回退到系统包管理器。"
+            rm -rf "$temp_dir"
+            return 1
+        fi
+
+        if [ "$actual_checksum" != "$expected_checksum" ]; then
+            print_warning "Node.js 安装包校验失败：$download_base"
+            continue
+        fi
+
+        downloaded=true
+        break
+    done
+
+    if [ "$downloaded" != true ]; then
+        rm -rf "$temp_dir"
+        return 1
+    fi
+
+    if ! tar -xzf "$archive_file" -C "$temp_dir"; then
+        print_warning "Node.js 安装包解压失败。"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+
+    install_dir="$install_root/$archive_base"
+    mkdir -p "$install_root" "$HOME/.local/bin"
+
+    if [ -d "$install_dir" ]; then
+        if [ ! -x "$install_dir/bin/node" ]; then
+            print_warning "现有 Node.js 目录不完整：$install_dir"
+            rm -rf "$temp_dir"
+            return 1
+        fi
+    else
+        mv "$temp_dir/$archive_base" "$install_dir"
+    fi
+
+    for executable in node npm npx corepack; do
+        if [ -e "$install_dir/bin/$executable" ]; then
+            ln -sfn "$install_dir/bin/$executable" "$HOME/.local/bin/$executable"
+        fi
+    done
+
+    rm -rf "$temp_dir"
+    persist_local_bin_path
+
+    if command -v node &> /dev/null; then
+        print_success "Node.js 安装成功：$(node --version)"
+        return 0
+    fi
+
+    return 1
 }
 
 # 检测 Codex 是否已安装
@@ -113,6 +334,14 @@ install_nodejs() {
 
     local node_major="$LATEST_NODE_LTS_MAJOR"
     print_info "将安装 Node.js LTS 主版本：$node_major"
+
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        print_info "中国大陆模式：优先使用国内镜像安装 Node.js。"
+        if install_nodejs_from_archive; then
+            return 0
+        fi
+        print_warning "镜像安装失败，正在回退到现有的系统安装方案..."
+    fi
 
     # 检测操作系统
     local os_type="$(uname -s)"
@@ -171,6 +400,40 @@ install_nodejs() {
     fi
 }
 
+run_codex_npm_install() {
+    local use_admin="$1"
+    local registry_url="$2"
+    local npm_args=(install -g @openai/codex --no-audit --no-fund --loglevel=error)
+
+    if [ -n "$registry_url" ]; then
+        npm_args+=(--registry "$registry_url")
+    fi
+
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        npm_args+=(--prefix "$HOME/.local")
+    fi
+
+    if [ "$use_admin" = true ]; then
+        run_as_admin npm "${npm_args[@]}"
+    else
+        npm "${npm_args[@]}"
+    fi
+}
+
+try_codex_npm_sources() {
+    local use_admin="$1"
+
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        print_info "正在使用国内 npm 镜像安装 Codex CLI：$CN_NPM_REGISTRY"
+        if run_codex_npm_install "$use_admin" "$CN_NPM_REGISTRY"; then
+            return 0
+        fi
+        print_warning "国内 npm 镜像安装失败，正在回退到 npm 官方源..."
+    fi
+
+    run_codex_npm_install "$use_admin" ""
+}
+
 # 安装 Codex
 install_codex() {
     print_info "正在安装 Codex CLI..."
@@ -182,7 +445,16 @@ install_codex() {
     fi
 
     local npm_version=$(npm --version 2>/dev/null || echo "unknown")
-    local npm_prefix=$(npm config get prefix 2>/dev/null || true)
+    local npm_prefix
+
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        npm_prefix="$HOME/.local"
+        mkdir -p "$npm_prefix/bin"
+        persist_local_bin_path
+    else
+        npm_prefix=$(npm config get prefix 2>/dev/null || true)
+    fi
+
     print_info "npm 版本：$npm_version"
 
     if [ -n "$npm_prefix" ] && [ -d "$npm_prefix/bin" ]; then
@@ -199,22 +471,22 @@ install_codex() {
     fi
 
     local install_status=1
-    print_info "正在执行：npm install -g @openai/codex --no-audit --no-fund --loglevel=error"
+    print_info "正在安装：@openai/codex"
     if [ "$use_admin" = true ]; then
-        if run_as_admin npm install -g @openai/codex --no-audit --no-fund --loglevel=error; then
+        if try_codex_npm_sources true; then
             install_status=0
         else
             install_status=$?
         fi
     else
-        if npm install -g @openai/codex --no-audit --no-fund --loglevel=error; then
+        if try_codex_npm_sources false; then
             install_status=0
         else
             install_status=$?
         fi
         if [ "$install_status" -ne 0 ] && has_admin_privilege; then
             print_warning "直接安装失败，正在尝试使用管理员权限重新安装 Codex CLI..."
-            if run_as_admin npm install -g @openai/codex --no-audit --no-fund --loglevel=error; then
+            if try_codex_npm_sources true; then
                 install_status=0
             else
                 install_status=$?
@@ -275,6 +547,7 @@ ensure_codex() {
 DEFAULT_BASE_URL="http://localhost:8080"
 BASE_URL=""
 API_KEY=""
+NETWORK_REGION="global"
 TEST_ONLY=false
 SHOW_SETTINGS=false
 
@@ -288,17 +561,22 @@ Codex 配置脚本
 选项：
   --url URL        设置 API 地址（默认：$DEFAULT_BASE_URL）
   --key KEY        设置 API Key
+  --mirror cn      启用中国大陆 Node.js/npm 镜像优化
   --test           只测试 API 连接（需要同时提供 --url 和 --key）
   --show           显示当前配置后退出
   --help           显示此帮助信息
 
 示例：
   $0 --url https://your-domain.tld --key your-api-key-here
+  $0 --mirror cn --url https://your-domain.tld --key your-api-key-here
   $0 --test --url https://your-domain.tld --key your-api-key-here
   $0 --show
 
 交互模式（不传参数）：
   $0
+
+默认使用原有官方源安装流程。只有显式传入 --mirror cn 时才启用国内镜像，
+国内镜像失败时会自动回退到官方源。
 EOF
 }
 
@@ -306,11 +584,36 @@ EOF
 while [[ $# -gt 0 ]]; do
     case $1 in
         --url)
+            if [ "$#" -lt 2 ]; then
+                print_error "--url 需要提供 URL"
+                exit 1
+            fi
             BASE_URL="$2"
             shift 2
             ;;
         --key)
+            if [ "$#" -lt 2 ]; then
+                print_error "--key 需要提供 API Key"
+                exit 1
+            fi
             API_KEY="$2"
+            shift 2
+            ;;
+        --mirror)
+            if [ "$#" -lt 2 ]; then
+                print_error "--mirror 需要提供 cn"
+                exit 1
+            fi
+            NETWORK_REGION="$2"
+            shift 2
+            ;;
+        # 兼容上一版脚本的参数，新用法请使用 --mirror cn。
+        --region)
+            if [ "$#" -lt 2 ]; then
+                print_error "--region 需要提供 cn 或 global"
+                exit 1
+            fi
+            NETWORK_REGION="$2"
             shift 2
             ;;
         --test)
@@ -332,6 +635,29 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+normalize_network_region() {
+    case "$NETWORK_REGION" in
+        cn|CN|china|China|mainland)
+            NETWORK_REGION="cn"
+            ;;
+        global|GLOBAL|Global|other|intl|international)
+            NETWORK_REGION="global"
+            ;;
+        *)
+            print_error "未知的镜像方案：$NETWORK_REGION（使用 --mirror cn，或省略该参数）"
+            return 1
+            ;;
+    esac
+}
+
+network_region_label() {
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        printf '中国大陆优化（国内镜像优先，官方源备用）'
+    else
+        printf '其他地区（原有官方源）'
+    fi
+}
 
 validate_api_key() {
     local api_key="$1"
@@ -791,6 +1117,10 @@ main() {
     print_info "Codex 配置脚本"
     echo "======================================="
     echo ""
+
+    if ! normalize_network_region; then
+        exit 1
+    fi
     
     # 如果要求则显示当前设置并退出
     if [ "$SHOW_SETTINGS" = true ]; then
@@ -832,6 +1162,7 @@ main() {
     
     print_info "本次配置："
     print_info "  API 地址：$BASE_URL"
+    print_info "  网络方案：$(network_region_label)"
     
     # 隐藏API密钥用于显示
     if [ ${#API_KEY} -gt 12 ]; then
@@ -885,8 +1216,13 @@ main() {
         print_info "可运行 'codex --version' 验证"
     else
         print_warning "Codex 未安装。如需手动安装："
-        print_info "1. 从 https://nodejs.org/ 安装 Node.js latest LTS"
-        print_info "2. 运行：npm install -g @openai/codex --no-audit --no-fund --loglevel=error"
+        if [ "$NETWORK_REGION" = "cn" ]; then
+            print_info "1. 从 $CN_NODE_DIST_URL 下载 Node.js latest LTS"
+            print_info "2. 运行：npm install -g @openai/codex --registry $CN_NPM_REGISTRY"
+        else
+            print_info "1. 从 https://nodejs.org/ 安装 Node.js latest LTS"
+            print_info "2. 运行：npm install -g @openai/codex --no-audit --no-fund --loglevel=error"
+        fi
     fi
 
     echo
