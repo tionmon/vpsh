@@ -43,6 +43,7 @@ REMOTE_PLUGIN="dsh-web-lan-access"
 REMOTE_PLUGIN_SPEC="${REMOTE_PLUGIN_SPEC:-dsh-web-lan-access@latest}"
 PROFILE_DIR="${DSH_HOME}/profiles/web"
 PROFILE_PATCH="${PROFILE_DIR}/cordis.patch.yml"
+LOOPBACK_PATCH="${DSH_HOME}/dsh-caddy-loopback.patch.yml"
 PATH_DSH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 log()  { printf '\033[1;32m[+]\033[0m %s\n' "$*"; }
@@ -164,6 +165,42 @@ mkdir -p "$DSH_HOME" "$DSH_WORKSPACE"
 chown -R "$DSH_USER:$DSH_USER" "$DSH_HOME" "$DSH_WORKSPACE"
 chmod 750 "$DSH_HOME" "$DSH_WORKSPACE"
 
+# Repair the broken V2 marker block from older versions of this installer.
+# A freshly initialized DSH profile may contain a standalone `[]`; appending a
+# second YAML document/list item after it makes the profile invalid. We only
+# remove our own managed block and preserve every other user patch verbatim.
+if [[ -f "$PROFILE_PATCH" ]]; then
+  log "检查并修复旧版 V2 profile patch（如存在）..."
+  python3 - "$PROFILE_PATCH" <<'PY_REPAIR'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text(encoding='utf-8')
+s2 = re.sub(r'\n?# BEGIN DSH-CADDY-V2-LOOPBACK.*?# END DSH-CADDY-V2-LOOPBACK\n?', '\n', s, flags=re.S)
+if s2 != s:
+    s2 = s2.strip()
+    # DSH expects a YAML patch list. Preserve an existing empty-list profile.
+    p.write_text((s2 + '\n') if s2 else '[]\n', encoding='utf-8')
+PY_REPAIR
+  chown "$DSH_USER:$DSH_USER" "$PROFILE_PATCH"
+fi
+
+# Keep our loopback override in its own overlay instead of mutating the profile.
+# This overlay is applied last via --patch, after the plugin bundle that binds
+# 0.0.0.0, so DSH stays reachable only from local Caddy.
+log "生成独立的 DSH loopback 安全覆盖层..."
+cat > "$LOOPBACK_PATCH" <<EOF_LOOPBACK
+# Managed by install-dsh-caddy-v2.sh -- do not expose DSH directly.
+- id: webserver
+  config:
+    host: '127.0.0.1'
+    port: ${DSH_PORT}
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
+EOF_LOOPBACK
+chown "$DSH_USER:$DSH_USER" "$LOOPBACK_PATCH"
+chmod 640 "$LOOPBACK_PATCH"
+
 write_systemd_unit() {
   cat > /etc/systemd/system/dsh.service <<EOF_UNIT
 [Unit]
@@ -179,7 +216,7 @@ WorkingDirectory=${DSH_WORKSPACE}
 Environment=HOME=${DSH_HOME}
 Environment=DSH_HOME=${DSH_HOME}
 Environment=PATH=${PATH_DSH}
-ExecStart=${DSH_BIN} --profile web --host 127.0.0.1 --port ${DSH_PORT} --trusted-host ${DOMAIN}
+ExecStart=${DSH_BIN} --profile web --patch ${LOOPBACK_PATCH} --host 127.0.0.1 --port ${DSH_PORT} --trusted-host ${DOMAIN}
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -233,25 +270,13 @@ run_as_dsh "$DSH_BIN" plugin --profile web remove "$REMOTE_PLUGIN" >/dev/null 2>
 run_as_dsh "$DSH_BIN" plugin --profile web add "$REMOTE_PLUGIN_SPEC"
 
 [[ -d "$PROFILE_DIR" ]] || die "插件安装后仍找不到 profile：$PROFILE_DIR"
-mkdir -p "$PROFILE_DIR"
-touch "$PROFILE_PATCH"
-chown "$DSH_USER:$DSH_USER" "$PROFILE_PATCH"
 
-log "覆盖插件默认公网绑定：强制 DSH 继续只监听 127.0.0.1..."
-python3 - "$PROFILE_PATCH" "$DSH_PORT" <<'PY'
-import pathlib, re, sys
-path = pathlib.Path(sys.argv[1])
-port = sys.argv[2]
-text = path.read_text(encoding="utf-8") if path.exists() else ""
-start = "# BEGIN DSH-CADDY-V2-LOOPBACK"
-end = "# END DSH-CADDY-V2-LOOPBACK"
-pattern = re.compile(r"\n?" + re.escape(start) + r".*?" + re.escape(end) + r"\n?", re.S)
-text = re.sub(pattern, "\n", text).rstrip() + "\n\n"
-text += f'''{start}\n# dsh-web-lan-access normally binds 0.0.0.0. This profile-level patch is\n# intentionally applied after bundle patches and restores loopback-only bind.\n- id: webserver\n  config:\n    host: '127.0.0.1'\n    port: !!js ctx.webStartup.port ?? {port}\n{end}\n'''
-path.write_text(text, encoding="utf-8")
-PY
-chown "$DSH_USER:$DSH_USER" "$PROFILE_PATCH"
-chmod 640 "$PROFILE_PATCH"
+log "验证 DSH 配置层可以正常解析..."
+if ! run_as_dsh "$DSH_BIN" --profile web --patch "$LOOPBACK_PATCH" --dump-config >/tmp/dsh-v2-dump-config.txt 2>/tmp/dsh-v2-dump-config.err; then
+  cat /tmp/dsh-v2-dump-config.err >&2 || true
+  die "DSH 配置解析失败。已停止启动，避免 systemd 反复重启。"
+fi
+rm -f /tmp/dsh-v2-dump-config.txt /tmp/dsh-v2-dump-config.err
 
 log "启动 DSH V2..."
 systemctl enable dsh.service >/dev/null 2>&1 || true
@@ -282,18 +307,29 @@ if printf '%s\n' "$LISTEN_ADDRS" | grep -Ev '^(127\.0\.0\.1|\[::1\]):[0-9]+$' | 
 fi
 log "监听安全检查通过：${LISTEN_ADDRS//$'\n'/, }"
 
-log "验证远程 Settings bootstrap 已注入..."
+log "验证远程 Settings bootstrap（ownsHost）已注入..."
 PLUGIN_OK=0
 for _ in $(seq 1 20); do
-  if curl -fsS "http://127.0.0.1:${DSH_PORT}/" 2>/dev/null | grep -q 'lan-access-polyfill'; then
+  PAGE="$(curl -fsS "http://127.0.0.1:${DSH_PORT}/" 2>/dev/null || true)"
+  if printf '%s' "$PAGE" | grep -q 'lan-access-polyfill' \
+     && printf '%s' "$PAGE" | grep -q 'ownsHost:true'; then
     PLUGIN_OK=1
     break
   fi
   sleep 1
 done
+# Some DSH builds protect even the loopback index with the native browser cookie.
+# In that case, verify both the installed bootstrap code and the composed bundle.
+if [[ "$PLUGIN_OK" -ne 1 ]]; then
+  if grep -Rqs 'ownsHost:true' "$PROFILE_DIR/node_modules/$REMOTE_PLUGIN" 2>/dev/null \
+     && run_as_dsh "$DSH_BIN" --profile web --patch "$LOOPBACK_PATCH" --dump-config 2>/dev/null | grep -q 'lan-access'; then
+    PLUGIN_OK=1
+    info "首页受 DSH 原生认证保护；已通过插件文件 + composed config 验证 ownsHost bootstrap。"
+  fi
+fi
 if [[ "$PLUGIN_OK" -ne 1 ]]; then
   journalctl -u dsh.service -n 150 --no-pager || true
-  die "未检测到 dsh-web-lan-access bootstrap。请不要继续公网使用该实例。"
+  die "未检测到包含 ownsHost=true 的远程 Settings bootstrap。请不要继续公网使用该实例。"
 fi
 
 REMOTE_PLUGIN_VERSION="$(run_as_dsh npm view "$REMOTE_PLUGIN" version 2>/dev/null || true)"
@@ -427,9 +463,12 @@ printf '== DSH ==\\n'
 systemctl --no-pager --full status dsh | sed -n '1,12p' || true
 printf '\\n== Listen ==\\n'
 ss -H -lnt | awk '\$4 ~ /:${DSH_PORT}\$/ {print \$4}'
-printf '\\n== Remote settings bootstrap ==\\n'
-if curl -fsS http://127.0.0.1:${DSH_PORT}/ | grep -q lan-access-polyfill; then
-  echo OK
+printf '\n== Remote settings bootstrap ==\n'
+PAGE="\$(curl -fsS http://127.0.0.1:${DSH_PORT}/ 2>/dev/null || true)"
+if printf '%s' "\$PAGE" | grep -q lan-access-polyfill && printf '%s' "\$PAGE" | grep -q 'ownsHost:true'; then
+  echo 'OK (live HTML: ownsHost=true)'
+elif grep -Rqs 'ownsHost:true' '${PROFILE_DIR}/node_modules/${REMOTE_PLUGIN}' 2>/dev/null; then
+  echo 'OK (installed bootstrap contains ownsHost=true; live index requires DSH auth)'
 else
   echo FAILED
 fi
@@ -445,20 +484,14 @@ DSH_BIN="${DSH_BIN}"
 DSH_USER="${DSH_USER}"
 DSH_HOME="${DSH_HOME}"
 PROFILE_PATCH="${PROFILE_PATCH}"
+LOOPBACK_PATCH="${LOOPBACK_PATCH}"
 PATH_DSH="${PATH_DSH}"
 systemctl stop dsh.service || true
 runuser -u "\$DSH_USER" -- env HOME="\$DSH_HOME" DSH_HOME="\$DSH_HOME" PATH="\$PATH_DSH" \
   "\$DSH_BIN" plugin --profile web remove ${REMOTE_PLUGIN} || true
-python3 - "\$PROFILE_PATCH" <<'PY'
-import pathlib, re, sys
-p = pathlib.Path(sys.argv[1])
-if p.exists():
-    s = p.read_text(encoding='utf-8')
-    s = re.sub(r'\\n?# BEGIN DSH-CADDY-V2-LOOPBACK.*?# END DSH-CADDY-V2-LOOPBACK\\n?', '\\n', s, flags=re.S)
-    p.write_text(s, encoding='utf-8')
-PY
+# Keep the loopback overlay: systemd still references it and it remains the safety boundary.
 systemctl restart dsh.service
-echo '已移除远程 Settings 插件。Caddy 配置保持不变。'
+echo '已移除远程 Settings 插件；loopback 安全覆盖与 Caddy 配置保持不变。'
 EOF_ROLLBACK
 chmod 0755 /usr/local/bin/dsh-v2-rollback-remote-settings
 
