@@ -166,16 +166,17 @@ DSH_VERSION="$($DSH_BIN --version 2>/dev/null | tail -n 1 || true)"
 [[ -n "$DSH_VERSION" ]] || die "dsh --version 没有输出，安装可能异常。"
 log "DSH: $DSH_VERSION ($DSH_BIN)"
 
-log "验证 DSH 原生依赖已正确构建..."
+log "验证 DSH 原生依赖与 node-pty helper..."
 DSH_PACKAGE_DIR="$(npm root -g)/@deepseek-ai/dsh"
 [[ -f "$DSH_PACKAGE_DIR/package.json" ]] || die "找不到全局 DSH package.json：$DSH_PACKAGE_DIR/package.json"
 if ! node - "$DSH_PACKAGE_DIR" <<'NODE_NATIVE_CHECK'
+const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const pkgDir = process.argv[2];
 const req = createRequire(path.join(pkgDir, 'package.json'));
-const packages = ['node-pty', 'koffi', '@deepseek-ai/dsh-subprocess-local'];
-for (const name of packages) {
+
+for (const name of ['node-pty', 'koffi']) {
   try {
     req(name);
     console.log(`[OK] ${name}`);
@@ -184,9 +185,37 @@ for (const name of packages) {
     process.exitCode = 1;
   }
 }
+
+try {
+  req.resolve('@deepseek-ai/dsh-subprocess-local/package.json');
+  console.log('[OK] @deepseek-ai/dsh-subprocess-local');
+} catch (error) {
+  console.error(`[FAIL] @deepseek-ai/dsh-subprocess-local: ${error && error.message ? error.message : error}`);
+  process.exitCode = 1;
+}
+
+try {
+  const ptyEntry = req.resolve('node-pty');
+  const ptyRoot = path.dirname(path.dirname(ptyEntry));
+  const candidates = [
+    path.join(ptyRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper'),
+    path.join(ptyRoot, 'build', 'Release', 'spawn-helper'),
+  ];
+  const helper = candidates.find((file) => fs.existsSync(file));
+  if (helper) {
+    const mode = fs.statSync(helper).mode;
+    if ((mode & 0o111) === 0) throw new Error(`${helper} is not executable`);
+    console.log(`[OK] node-pty spawn-helper executable: ${helper}`);
+  } else if (process.platform !== 'win32') {
+    console.warn('[WARN] node-pty spawn-helper not found; module load succeeded, continuing.');
+  }
+} catch (error) {
+  console.error(`[FAIL] node-pty helper: ${error && error.message ? error.message : error}`);
+  process.exitCode = 1;
+}
 NODE_NATIVE_CHECK
 then
-  die "DSH 原生依赖加载失败；通常说明 npm install scripts 未正确执行。"
+  die "DSH 原生依赖检查失败；通常说明 npm install scripts 未正确执行。"
 fi
 
 log "创建/修复隔离的 DSH 用户、数据目录与工作区..."
