@@ -28,6 +28,7 @@ IFS=$'\n\t'
 #   DSH_USER=dsh
 #   DSH_HOME=/var/lib/dsh
 #   DSH_WORKSPACE=/srv/dsh/workspace
+#   DSH_ALLOW_SCRIPTS=...       (advanced: npm global install-script whitelist)
 
 DSH_PORT="${DSH_PORT:-3080}"
 DOMAIN="${DOMAIN:-${1:-}}"
@@ -39,6 +40,7 @@ DSH_WORKSPACE="${DSH_WORKSPACE:-/srv/dsh/workspace}"
 CREDENTIAL_FILE="${CREDENTIAL_FILE:-/root/dsh-access.txt}"
 NODE_MAJOR="${NODE_MAJOR:-24}"
 DSH_CHANNEL="${DSH_CHANNEL:-latest}"
+DSH_ALLOW_SCRIPTS="${DSH_ALLOW_SCRIPTS:-@deepseek-ai/dsh-subprocess-local,koffi,node-pty,@google/genai,protobufjs}"
 REMOTE_PLUGIN="dsh-web-lan-access"
 REMOTE_PLUGIN_SPEC="${REMOTE_PLUGIN_SPEC:-dsh-web-lan-access@latest}"
 PROFILE_DIR="${DSH_HOME}/profiles/web"
@@ -149,13 +151,43 @@ systemctl stop dsh.service >/dev/null 2>&1 || true
 
 log "全局安装/更新 DeepSeek Harness (${DSH_CHANNEL})..."
 DSH_SPEC="@deepseek-ai/dsh@${DSH_CHANNEL}"
-npm install -g "$DSH_SPEC" --foreground-scripts
+info "仅本次安装允许 DSH 必需的 install scripts：${DSH_ALLOW_SCRIPTS}"
+if ! npm install -g \
+  --allow-scripts="$DSH_ALLOW_SCRIPTS" \
+  --strict-allow-scripts=true \
+  --foreground-scripts \
+  "$DSH_SPEC"; then
+  die "DSH npm 安装失败。若上游新增了需要 install script 的依赖，请核对 npm 提示并更新 DSH_ALLOW_SCRIPTS 白名单。"
+fi
 hash -r
 DSH_BIN="$(command -v dsh || true)"
 [[ -n "$DSH_BIN" ]] || die "DSH 已安装但找不到 dsh 命令。"
 DSH_VERSION="$($DSH_BIN --version 2>/dev/null | tail -n 1 || true)"
 [[ -n "$DSH_VERSION" ]] || die "dsh --version 没有输出，安装可能异常。"
 log "DSH: $DSH_VERSION ($DSH_BIN)"
+
+log "验证 DSH 原生依赖已正确构建..."
+DSH_PACKAGE_DIR="$(npm root -g)/@deepseek-ai/dsh"
+[[ -f "$DSH_PACKAGE_DIR/package.json" ]] || die "找不到全局 DSH package.json：$DSH_PACKAGE_DIR/package.json"
+if ! node - "$DSH_PACKAGE_DIR" <<'NODE_NATIVE_CHECK'
+const path = require('node:path');
+const { createRequire } = require('node:module');
+const pkgDir = process.argv[2];
+const req = createRequire(path.join(pkgDir, 'package.json'));
+const packages = ['node-pty', 'koffi', '@deepseek-ai/dsh-subprocess-local'];
+for (const name of packages) {
+  try {
+    req(name);
+    console.log(`[OK] ${name}`);
+  } catch (error) {
+    console.error(`[FAIL] ${name}: ${error && error.message ? error.message : error}`);
+    process.exitCode = 1;
+  }
+}
+NODE_NATIVE_CHECK
+then
+  die "DSH 原生依赖加载失败；通常说明 npm install scripts 未正确执行。"
+fi
 
 log "创建/修复隔离的 DSH 用户、数据目录与工作区..."
 if ! id "$DSH_USER" >/dev/null 2>&1; then
@@ -448,10 +480,10 @@ cat > /usr/local/bin/dsh-access-url <<EOF_HELPER
 set -euo pipefail
 TOKEN="\$(journalctl -u dsh.service -b --no-pager -n 500 2>/dev/null | sed -n 's/.*[?&]token=\\([^[:space:]]*\\).*/\\1/p' | tail -n 1 | tr -d '\\r')"
 if [[ -n "\$TOKEN" ]]; then
-  printf 'https://${DOMAIN}/?token=%s\\n' "\$TOKEN"
+  printf 'https://${DOMAIN}/?token=%s\n' "\$TOKEN"
 else
-  printf 'https://${DOMAIN}/\\n'
-  printf '未从日志找到启动 token；若浏览器已有 DSH Cookie，可直接访问。\\n' >&2
+  printf 'https://${DOMAIN}/\n'
+  printf '未从日志找到启动 token；若浏览器已有 DSH Cookie，可直接访问。\n' >&2
 fi
 EOF_HELPER
 chmod 0755 /usr/local/bin/dsh-access-url
@@ -459,9 +491,9 @@ chmod 0755 /usr/local/bin/dsh-access-url
 cat > /usr/local/bin/dsh-v2-check <<EOF_CHECK
 #!/usr/bin/env bash
 set -euo pipefail
-printf '== DSH ==\\n'
+printf '== DSH ==\n'
 systemctl --no-pager --full status dsh | sed -n '1,12p' || true
-printf '\\n== Listen ==\\n'
+printf '\n== Listen ==\n'
 ss -H -lnt | awk '\$4 ~ /:${DSH_PORT}\$/ {print \$4}'
 printf '\n== Remote settings bootstrap ==\n'
 PAGE="\$(curl -fsS http://127.0.0.1:${DSH_PORT}/ 2>/dev/null || true)"
@@ -472,7 +504,7 @@ elif grep -Rqs 'ownsHost:true' '${PROFILE_DIR}/node_modules/${REMOTE_PLUGIN}' 2>
 else
   echo FAILED
 fi
-printf '\\n== Caddy ==\\n'
+printf '\n== Caddy ==\n'
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 EOF_CHECK
 chmod 0755 /usr/local/bin/dsh-v2-check
