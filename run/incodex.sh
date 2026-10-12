@@ -1,7 +1,10 @@
 #!/bin/bash
-# Codex配置脚本
+# Codex配置脚本（适配 Codex CLI 0.16x 及以上版本）
 # 默认方案：./setup-codex.sh --url https://your-domain.tld --key YOUR_KEY
 # 中国大陆：./setup-codex.sh --mirror cn --url https://your-domain.tld --key YOUR_KEY
+#
+# API Key 写入 ~/.codex/auth.json（与 codex login --with-api-key 相同格式），
+# 不再依赖 shell 环境变量，安装完成后任何终端都可以直接运行 codex。
 
 set -e
 set -o pipefail
@@ -403,7 +406,7 @@ install_nodejs() {
 run_codex_npm_install() {
     local use_admin="$1"
     local registry_url="$2"
-    local npm_args=(install -g @openai/codex --no-audit --no-fund --loglevel=error)
+    local npm_args=(install -g @openai/codex@latest --no-audit --no-fund --loglevel=error)
 
     if [ -n "$registry_url" ]; then
         npm_args+=(--registry "$registry_url")
@@ -514,12 +517,78 @@ install_codex() {
     fi
 }
 
+get_installed_codex_version() {
+    codex --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n 1 || true
+}
+
+get_latest_codex_version() {
+    local version=""
+
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        version=$(npm view @openai/codex version --registry "$CN_NPM_REGISTRY" 2>/dev/null || true)
+    fi
+    if [ -z "$version" ]; then
+        version=$(npm view @openai/codex version 2>/dev/null || true)
+    fi
+
+    printf '%s' "$version"
+}
+
+# 当前 codex 是否由本脚本会使用的 npm 前缀安装（只升级这种情况，避免与 brew 等安装方式重复）
+codex_managed_by_script_npm() {
+    local npm_prefix
+
+    if [ "$NETWORK_REGION" = "cn" ]; then
+        npm_prefix="$HOME/.local"
+    else
+        npm_prefix=$(npm config get prefix 2>/dev/null || true)
+    fi
+
+    [ -n "$npm_prefix" ] && [ -d "$npm_prefix/lib/node_modules/@openai/codex" ]
+}
+
+# 已安装时检查是否为最新版本，旧版本可能不兼容新的配置项
+upgrade_codex_if_outdated() {
+    local installed_version
+    local latest_version
+
+    if ! command -v npm &> /dev/null; then
+        return 0
+    fi
+
+    installed_version=$(get_installed_codex_version)
+    latest_version=$(get_latest_codex_version)
+
+    if [ -z "$installed_version" ] || [ -z "$latest_version" ]; then
+        print_warning "无法确认 Codex 最新版本，跳过升级检查。"
+        return 0
+    fi
+
+    if [ "$installed_version" = "$latest_version" ]; then
+        print_success "Codex 已是最新版本：$installed_version"
+        return 0
+    fi
+
+    if ! codex_managed_by_script_npm; then
+        print_warning "当前 Codex 版本 $installed_version，最新版本 $latest_version。"
+        print_warning "检测到 Codex 不是通过 npm 安装的，请使用原安装方式手动升级。"
+        return 0
+    fi
+
+    print_info "Codex 版本 $installed_version 较旧，正在升级到 $latest_version..."
+    if ! install_codex; then
+        print_warning "Codex 升级失败，将继续使用当前版本：$installed_version"
+    fi
+    return 0
+}
+
 # 确保 Codex 已安装
 ensure_codex() {
     print_info "正在检查 Codex 是否已安装..."
 
     # 检测 Codex 是否已安装
     if check_codex; then
+        upgrade_codex_if_outdated
         return 0
     fi
 
@@ -545,10 +614,11 @@ ensure_codex() {
 
 # 默认值
 DEFAULT_BASE_URL="http://localhost:8080"
+DEFAULT_MODEL="gpt-5.6-sol"
 BASE_URL=""
 API_KEY=""
+MODEL=""
 NETWORK_REGION="global"
-TEST_ONLY=false
 SHOW_SETTINGS=false
 
 # 显示帮助的函数
@@ -560,16 +630,17 @@ Codex 配置脚本
 
 选项：
   --url URL        设置 API 地址（默认：$DEFAULT_BASE_URL）
+                   Codex 会请求 <URL>/responses，如服务商要求 /v1 请一并填写
   --key KEY        设置 API Key
+  --model MODEL    设置默认模型（默认：$DEFAULT_MODEL）
   --mirror cn      启用中国大陆 Node.js/npm 镜像优化
-  --test           只测试 API 连接（需要同时提供 --url 和 --key）
   --show           显示当前配置后退出
   --help           显示此帮助信息
 
 示例：
   $0 --url https://your-domain.tld --key your-api-key-here
   $0 --mirror cn --url https://your-domain.tld --key your-api-key-here
-  $0 --test --url https://your-domain.tld --key your-api-key-here
+  $0 --url https://your-domain.tld/v1 --key your-api-key-here --model gpt-5.6-sol
   $0 --show
 
 交互模式（不传参数）：
@@ -599,6 +670,14 @@ while [[ $# -gt 0 ]]; do
             API_KEY="$2"
             shift 2
             ;;
+        --model)
+            if [ "$#" -lt 2 ]; then
+                print_error "--model 需要提供模型名称"
+                exit 1
+            fi
+            MODEL="$2"
+            shift 2
+            ;;
         --mirror)
             if [ "$#" -lt 2 ]; then
                 print_error "--mirror 需要提供 cn"
@@ -615,10 +694,6 @@ while [[ $# -gt 0 ]]; do
             fi
             NETWORK_REGION="$2"
             shift 2
-            ;;
-        --test)
-            TEST_ONLY=true
-            shift
             ;;
         --show)
             SHOW_SETTINGS=true
@@ -659,63 +734,93 @@ network_region_label() {
     fi
 }
 
+# 只拦截会破坏 JSON / shell 配置的字符，不限制第三方服务商的 Key 格式
 validate_api_key() {
     local api_key="$1"
 
-    if [[ "$api_key" =~ ^[A-Za-z0-9_-]+$ ]]; then
-        return 0
+    case "$api_key" in
+        *[[:space:]]*|*\"*|*\'*|*\\*|*\`*|*\$*)
+            print_error "API Key 不能包含空白字符、引号、反斜杠、反引号或 \$。"
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+validate_simple_value() {
+    local label="$1"
+    local value="$2"
+
+    case "$value" in
+        *[[:space:]]*|*\"*|*\'*|*\\*|*\`*|*\$*)
+            print_error "$label 不能包含空白字符、引号、反斜杠、反引号或 \$。"
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+validate_base_url() {
+    local base_url="$1"
+
+    case "$base_url" in
+        http://*|https://*) ;;
+        *)
+            print_error "API 地址必须以 http:// 或 https:// 开头：$base_url"
+            return 1
+            ;;
+    esac
+
+    validate_simple_value "API 地址" "$base_url"
+}
+
+# 从终端读取输入（兼容 curl ... | bash 的管道运行方式）
+prompt_input() {
+    local prompt="$1"
+    local __var_name="$2"
+    local __value=""
+
+    if { read -r -p "$prompt" __value < /dev/tty; } 2>/dev/null; then
+        :
+    else
+        read -r -p "$prompt" __value || true
     fi
 
-    print_error "API Key 格式不正确，只能包含字母、数字、连字符和下划线。"
-    return 1
+    printf -v "$__var_name" '%s' "$__value"
 }
 
 # 备份现有配置的函数
 backup_config() {
     local timestamp=$(date +%Y%m%d_%H%M%S)
+    local file
 
-    if [ -f "$HOME/.codex/config.toml" ]; then
-        local backup_file="$HOME/.codex/config.toml.backup.$timestamp"
-        cp "$HOME/.codex/config.toml" "$backup_file"
-        print_info "已备份现有配置到：$backup_file"
-    fi
+    for file in config.toml auth.json; do
+        if [ -f "$HOME/.codex/$file" ]; then
+            local backup_file="$HOME/.codex/$file.backup.$timestamp"
+            cp "$HOME/.codex/$file" "$backup_file"
+            chmod 600 "$backup_file" 2>/dev/null || true
+            print_info "已备份现有 $file 到：$backup_file"
+        fi
+    done
 }
 
-# 测试API连接的函数
-test_api_connection() {
-    local base_url="$1"
-    local api_key="$2"
-    
-    print_info "正在测试 API 连接..."
-    
-    # 根据是否为团队URL确定正确的端点
-    local test_endpoint
-    local balance_field
-    test_endpoint="${base_url}/health"
-    balance_field="status"
-    
-    # 尝试获取余额以验证API密钥
-    local response
-    if ! response=$(curl -s --connect-timeout 10 -o /dev/null -w "%{http_code}" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $api_key" \
-        "$test_endpoint" 2>/dev/null); then
-        response="000"
-    fi
-    
-    if [ "$response" = "200" ]; then
-        # 200 就是通了，api内部已经验证了余额，不需要再验证
-        print_success "API 连接测试成功！"
-        return 0
-    fi
-    
-    if [ "$response" = "401" ]; then
-        print_error "API Key 认证失败，请检查 API Key 是否正确。"
-    else
-        print_error "API 测试失败，HTTP 状态码：$response"
-    fi
-    
-    return 1
+# 写入 Codex 认证文件（与 codex login --with-api-key 生成的格式一致）
+write_codex_auth() {
+    local api_key="$1"
+    local config_dir="$HOME/.codex"
+    local auth_file="$config_dir/auth.json"
+    local temp_file
+
+    mkdir -p "$config_dir"
+    temp_file=$(mktemp "$config_dir/.auth.XXXXXX")
+    chmod 600 "$temp_file"
+    printf '{\n  "auth_mode": "apikey",\n  "OPENAI_API_KEY": "%s"\n}\n' "$api_key" > "$temp_file"
+    mv "$temp_file" "$auth_file"
+    chmod 600 "$auth_file" 2>/dev/null || true
+
+    print_success "API Key 已写入：$auth_file"
 }
 
 toml_quote() {
@@ -760,10 +865,17 @@ merge_toml_section() {
             return trim(value)
         }
 
+        function flush_blanks() {
+            while (pending_blanks > 0) {
+                print ""
+                pending_blanks--
+            }
+        }
+
         function emit_missing(    i, key) {
             for (i = 1; i <= key_count; i++) {
                 key = keys[i]
-                if (!updated[key]) {
+                if (!updated[key] && values[key] != REMOVE) {
                     print key " = " values[key]
                     updated[key] = 1
                 }
@@ -771,6 +883,9 @@ merge_toml_section() {
         }
 
         BEGIN {
+            # 值为 __REMOVE__ 的键会从该节中删除（用于清理新版 Codex 已废弃的配置）
+            REMOVE = "__REMOVE__"
+            has_values = 0
             while ((getline line < settings_file) > 0) {
                 key = line
                 sub(/\t.*$/, "", key)
@@ -779,6 +894,9 @@ merge_toml_section() {
                 keys[++key_count] = key
                 values[key] = value
                 updated[key] = 0
+                if (value != REMOVE) {
+                    has_values = 1
+                }
             }
             close(settings_file)
 
@@ -788,10 +906,18 @@ merge_toml_section() {
 
         {
             line = $0
+
+            # 暂存空行，保证补充的键写在节内容末尾、空行之前
+            if (line ~ /^[[:space:]]*$/) {
+                pending_blanks++
+                next
+            }
+
             if (is_section_header(line)) {
                 if (in_section) {
                     emit_missing()
                 }
+                flush_blanks()
 
                 current_section = get_section_name(line)
                 if (section != "" && current_section == section) {
@@ -805,15 +931,20 @@ merge_toml_section() {
                 next
             }
 
+            flush_blanks()
+
             if (in_section) {
                 for (i = 1; i <= key_count; i++) {
                     key = keys[i]
                     pattern = "^[[:space:]]*" key "[[:space:]]*="
                     if (line ~ pattern) {
+                        updated[key] = 1
+                        if (values[key] == REMOVE) {
+                            next
+                        }
                         match(line, /^[[:space:]]*/)
                         indent = substr(line, RSTART, RLENGTH)
                         print indent key " = " values[key]
-                        updated[key] = 1
                         next
                     }
                 }
@@ -826,8 +957,9 @@ merge_toml_section() {
             if (in_section) {
                 emit_missing()
             }
+            flush_blanks()
 
-            if (!found_section) {
+            if (!found_section && has_values) {
                 if (NR > 0) {
                     print ""
                 }
@@ -840,9 +972,35 @@ merge_toml_section() {
     ' "$source_file" > "$target_file"
 }
 
+# 删除整个 TOML 节（新版 Codex 已不再识别的节）
+drop_toml_section() {
+    local source_file="$1"
+    local target_file="$2"
+    local section_name="$3"
+
+    awk -v section="$section_name" '
+        function trim(value) {
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            return value
+        }
+
+        /^[[:space:]]*\[[^]]+\][[:space:]]*(#.*)?$/ {
+            name = $0
+            sub(/^[[:space:]]*\[/, "", name)
+            sub(/\][[:space:]]*(#.*)?$/, "", name)
+            name = trim(name)
+            skipping = (name == section || index(name, section ".") == 1)
+        }
+
+        !skipping { print }
+    ' "$source_file" > "$target_file"
+}
+
 # 创建或合并 Codex 配置的函数
 create_codex_config() {
     local base_url="$1"
+    local model="$2"
     local config_dir="$HOME/.codex"
     local config_file="$config_dir/config.toml"
 
@@ -850,7 +1008,6 @@ create_codex_config() {
 
     local root_settings
     local provider_settings
-    local experimental_settings
     local feature_settings
     local sandbox_settings
     local source_file
@@ -858,7 +1015,6 @@ create_codex_config() {
 
     root_settings=$(mktemp "$config_dir/.root-settings.XXXXXX")
     provider_settings=$(mktemp "$config_dir/.provider-settings.XXXXXX")
-    experimental_settings=$(mktemp "$config_dir/.experimental-settings.XXXXXX")
     feature_settings=$(mktemp "$config_dir/.feature-settings.XXXXXX")
     sandbox_settings=$(mktemp "$config_dir/.sandbox-settings.XXXXXX")
     source_file=$(mktemp "$config_dir/.config-source.XXXXXX")
@@ -868,35 +1024,36 @@ create_codex_config() {
         cp "$config_file" "$source_file"
     fi
 
+    # disable_response_storage 已被新版 Codex 移除
     write_toml_settings_file "$root_settings" \
         "model_provider" "$(toml_quote "codex")" \
-        "model" "$(toml_quote "gpt-5.6-sol")" \
+        "model" "$(toml_quote "$model")" \
         "model_reasoning_effort" "$(toml_quote "high")" \
-        "disable_response_storage" "true" \
-        "sandbox_mode" "$(toml_quote "danger-full-access")"
+        "sandbox_mode" "$(toml_quote "danger-full-access")" \
+        "disable_response_storage" "__REMOVE__"
 
+    # requires_openai_auth = true：使用 ~/.codex/auth.json 中的 Key 作为 Bearer Token，
+    # 不再依赖 env_key 环境变量（新开终端、IDE 插件中未加载环境变量时会报 Missing environment variable）
     write_toml_settings_file "$provider_settings" \
         "name" "$(toml_quote "codex")" \
         "base_url" "$(toml_quote "$base_url")" \
         "wire_api" "$(toml_quote "responses")" \
+        "requires_openai_auth" "true" \
         "supports_websockets" "false" \
-        "env_key" "$(toml_quote "CODEX_API_KEY")" \
-        "http_headers" '{ "x-openai-actor-authorization" = "codex-compatible-image-generation" }'
+        "http_headers" '{ "x-openai-actor-authorization" = "codex-compatible-image-generation" }' \
+        "env_key" "__REMOVE__"
 
-    write_toml_settings_file "$experimental_settings" \
-        "use_freeform_apply_patch" "true" \
-        "use_unified_exec_tool" "true"
-
+    # 以下特性开关在新版 Codex 中已移除或已默认启用，写入只会产生 "ignored" 警告
     write_toml_settings_file "$feature_settings" \
-        "apply_patch_freeform" "true" \
-        "plan_tool" "true" \
-        "rmcp_client" "true" \
-        "streamable_shell" "false" \
-        "unified_exec" "false" \
-        "view_image_tool" "true" \
         "image_generation" "true" \
-        "experimental_windows_sandbox" "true" \
-        "parallel" "true"
+        "apply_patch_freeform" "__REMOVE__" \
+        "plan_tool" "__REMOVE__" \
+        "rmcp_client" "__REMOVE__" \
+        "streamable_shell" "__REMOVE__" \
+        "unified_exec" "__REMOVE__" \
+        "view_image_tool" "__REMOVE__" \
+        "experimental_windows_sandbox" "__REMOVE__" \
+        "parallel" "__REMOVE__"
 
     write_toml_settings_file "$sandbox_settings" \
         "network_access" "true"
@@ -908,8 +1065,9 @@ create_codex_config() {
     merge_toml_section "$source_file" "$target_file" "model_providers.codex" "$provider_settings"
     mv "$target_file" "$source_file"
 
+    # [experimental] 节已被新版 Codex 移除
     target_file=$(mktemp "$config_dir/.config-target.XXXXXX")
-    merge_toml_section "$source_file" "$target_file" "experimental" "$experimental_settings"
+    drop_toml_section "$source_file" "$target_file" "experimental"
     mv "$target_file" "$source_file"
 
     target_file=$(mktemp "$config_dir/.config-target.XXXXXX")
@@ -920,160 +1078,106 @@ create_codex_config() {
     merge_toml_section "$source_file" "$target_file" "sandbox_workspace_write" "$sandbox_settings"
     mv "$target_file" "$config_file"
 
-    rm -f "$root_settings" "$provider_settings" "$experimental_settings" "$feature_settings" "$sandbox_settings" "$source_file" "$target_file"
+    rm -f "$root_settings" "$provider_settings" "$feature_settings" "$sandbox_settings" "$source_file" "$target_file"
 
     print_success "Codex 配置已合并写入：$config_file"
     return 0
 }
 
+# 在 shell 配置文件中新增或更新一行环境变量
+# 使用 awk + ENVIRON 传值，Key 中的 & | / 等字符无需转义
+upsert_shell_env() {
+    local shell_config="$1"
+    local is_fish="$2"
+    local name="$3"
+    local value="$4"
+    local comment="$5"
+    local match_prefix
+    local new_line
+    local temp_file
+
+    if [ "$is_fish" = true ]; then
+        match_prefix="set -x $name "
+        new_line="set -x $name \"$value\""
+    else
+        match_prefix="export $name="
+        new_line="export $name=\"$value\""
+    fi
+
+    if [ -f "$shell_config" ] && grep -q "^[[:space:]]*$match_prefix" "$shell_config"; then
+        temp_file=$(mktemp "${TMPDIR:-/tmp}/codex-shellrc.XXXXXX")
+        UPSERT_PREFIX="$match_prefix" UPSERT_LINE="$new_line" awk '
+            {
+                match($0, /^[[:space:]]*/)
+                indent = substr($0, RSTART, RLENGTH)
+                if (index(substr($0, RLENGTH + 1), ENVIRON["UPSERT_PREFIX"]) == 1) {
+                    print indent ENVIRON["UPSERT_LINE"]
+                    next
+                }
+                print
+            }
+        ' "$shell_config" > "$temp_file"
+        # 用 cat 覆盖而不是 mv，保留原文件权限和软链接
+        cat "$temp_file" > "$shell_config"
+        rm -f "$temp_file"
+        print_info "已更新 $shell_config 中的 $name"
+    else
+        printf '\n# %s\n%s\n' "$comment" "$new_line" >> "$shell_config"
+        print_info "已将 $name 写入 $shell_config"
+    fi
+}
+
 # 设置环境变量的函数
+# Codex 本身已改为读取 ~/.codex/auth.json；这里同步环境变量，避免旧脚本写入的过期
+# CODEX_API_KEY 覆盖 auth.json（codex exec 会优先使用 CODEX_API_KEY 环境变量）。
 set_environment_variable() {
     local base_url="$1"
     local api_key="$2"
+    local shell_config
+    local shell_name
+    local is_fish=false
 
     # 为当前会话导出
     export OPENAI_BASE_URL="$base_url"
     export OPENAI_API_KEY="$api_key"
     export CODEX_API_KEY="$api_key"
 
-    # 检测shell并添加到相应的配置文件
-    local shell_config=""
-    local shell_name=""
+    get_shell_config_path
+    shell_config="$DETECTED_SHELL_CONFIG"
+    shell_name="$DETECTED_SHELL_NAME"
 
-    # 首先检查$SHELL以确定用户的默认shell
-    if [ -n "$SHELL" ]; then
-        shell_name=$(basename "$SHELL")
-        case "$shell_name" in
-            bash)
-                shell_config="$HOME/.bashrc"
-                [ -f "$HOME/.bash_profile" ] && shell_config="$HOME/.bash_profile"
-                ;;
-            zsh)
-                shell_config="$HOME/.zshrc"
-                ;;
-            fish)
-                shell_config="$HOME/.config/fish/config.fish"
-                ;;
-            *)
-                shell_config="$HOME/.profile"
-                ;;
-        esac
-    # 如果$SHELL未设置，回退到检查版本变量
-    elif [ -n "$BASH_VERSION" ]; then
-        shell_config="$HOME/.bashrc"
-        [ -f "$HOME/.bash_profile" ] && shell_config="$HOME/.bash_profile"
-    elif [ -n "$ZSH_VERSION" ]; then
-        shell_config="$HOME/.zshrc"
-    elif [ -n "$FISH_VERSION" ]; then
-        shell_config="$HOME/.config/fish/config.fish"
-    else
-        shell_config="$HOME/.profile"
-    fi
-
-    print_info "检测到的 Shell：${shell_name:-$(basename $SHELL 2>/dev/null || echo 'unknown')}"
+    print_info "检测到的 Shell：${shell_name:-unknown}"
     print_info "使用的配置文件：$shell_config"
 
-    # 以不同方式处理Fish shell（使用'set -x'代替'export'）
     if [ "$shell_name" = "fish" ] || [[ "$shell_config" == *"fish"* ]]; then
-        # Fish shell语法
-        mkdir -p "$(dirname "$shell_config")"
-
-        # 处理 OPENAI_BASE_URL
-        if [ -f "$shell_config" ] && grep -q "set -x OPENAI_BASE_URL" "$shell_config"; then
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s|set -x OPENAI_BASE_URL.*|set -x OPENAI_BASE_URL \"$base_url\"|" "$shell_config"
-            else
-                sed -i "s|set -x OPENAI_BASE_URL.*|set -x OPENAI_BASE_URL \"$base_url\"|" "$shell_config"
-            fi
-            print_info "已更新 $shell_config 中的 OPENAI_BASE_URL"
-        else
-            echo "" >> "$shell_config"
-            echo "# Codex 环境变量" >> "$shell_config"
-            echo "set -x OPENAI_BASE_URL \"$base_url\"" >> "$shell_config"
-            print_info "已将 OPENAI_BASE_URL 写入 $shell_config"
-        fi
-
-        # 处理 OPENAI_API_KEY
-        if [ -f "$shell_config" ] && grep -q "set -x OPENAI_API_KEY" "$shell_config"; then
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s/set -x OPENAI_API_KEY.*/set -x OPENAI_API_KEY \"$api_key\"/" "$shell_config"
-            else
-                sed -i "s/set -x OPENAI_API_KEY.*/set -x OPENAI_API_KEY \"$api_key\"/" "$shell_config"
-            fi
-            print_info "已更新 $shell_config 中的 OPENAI_API_KEY"
-        else
-            echo "" >> "$shell_config"
-            echo "# OpenAI API 密钥" >> "$shell_config"
-            echo "set -x OPENAI_API_KEY \"$api_key\"" >> "$shell_config"
-            print_info "已将 OPENAI_API_KEY 写入 $shell_config"
-        fi
-
-        # 处理 CODEX_API_KEY
-        if [ -f "$shell_config" ] && grep -q "set -x CODEX_API_KEY" "$shell_config"; then
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s/set -x CODEX_API_KEY.*/set -x CODEX_API_KEY \"$api_key\"/" "$shell_config"
-            else
-                sed -i "s/set -x CODEX_API_KEY.*/set -x CODEX_API_KEY \"$api_key\"/" "$shell_config"
-            fi
-            print_info "已更新 $shell_config 中的 CODEX_API_KEY"
-        else
-            echo "# Codex API 密钥" >> "$shell_config"
-            echo "set -x CODEX_API_KEY \"$api_key\"" >> "$shell_config"
-            print_info "已将 CODEX_API_KEY 写入 $shell_config"
-        fi
-    else
-        # Bash/Zsh/sh语法
-        # 处理 OPENAI_BASE_URL
-        if [ -f "$shell_config" ] && grep -q "export OPENAI_BASE_URL=" "$shell_config"; then
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s|export OPENAI_BASE_URL=.*|export OPENAI_BASE_URL=\"$base_url\"|" "$shell_config"
-            else
-                sed -i "s|export OPENAI_BASE_URL=.*|export OPENAI_BASE_URL=\"$base_url\"|" "$shell_config"
-            fi
-            print_info "已更新 $shell_config 中的 OPENAI_BASE_URL"
-        else
-            echo "" >> "$shell_config"
-            echo "# Codex 环境变量" >> "$shell_config"
-            echo "export OPENAI_BASE_URL=\"$base_url\"" >> "$shell_config"
-            print_info "已将 OPENAI_BASE_URL 写入 $shell_config"
-        fi
-
-        # 处理 OPENAI_API_KEY
-        if [ -f "$shell_config" ] && grep -q "export OPENAI_API_KEY=" "$shell_config"; then
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s/export OPENAI_API_KEY=.*/export OPENAI_API_KEY=\"$api_key\"/" "$shell_config"
-            else
-                sed -i "s/export OPENAI_API_KEY=.*/export OPENAI_API_KEY=\"$api_key\"/" "$shell_config"
-            fi
-            print_info "已更新 $shell_config 中的 OPENAI_API_KEY"
-        else
-            echo "" >> "$shell_config"
-            echo "# OpenAI API 密钥" >> "$shell_config"
-            echo "export OPENAI_API_KEY=\"$api_key\"" >> "$shell_config"
-            print_info "已将 OPENAI_API_KEY 写入 $shell_config"
-        fi
-
-        # 处理 CODEX_API_KEY
-        if [ -f "$shell_config" ] && grep -q "export CODEX_API_KEY=" "$shell_config"; then
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s/export CODEX_API_KEY=.*/export CODEX_API_KEY=\"$api_key\"/" "$shell_config"
-            else
-                sed -i "s/export CODEX_API_KEY=.*/export CODEX_API_KEY=\"$api_key\"/" "$shell_config"
-            fi
-            print_info "已更新 $shell_config 中的 CODEX_API_KEY"
-        else
-            echo "# Codex API 密钥" >> "$shell_config"
-            echo "export CODEX_API_KEY=\"$api_key\"" >> "$shell_config"
-            print_info "已将 CODEX_API_KEY 写入 $shell_config"
-        fi
+        is_fish=true
     fi
+
+    mkdir -p "$(dirname "$shell_config")"
+
+    upsert_shell_env "$shell_config" "$is_fish" "OPENAI_BASE_URL" "$base_url" "Codex 环境变量"
+    upsert_shell_env "$shell_config" "$is_fish" "OPENAI_API_KEY" "$api_key" "OpenAI API 密钥"
+    upsert_shell_env "$shell_config" "$is_fish" "CODEX_API_KEY" "$api_key" "Codex API 密钥"
 
     print_success "环境变量 OPENAI_BASE_URL、OPENAI_API_KEY 和 CODEX_API_KEY 设置成功"
     return 0
 }
 
+mask_secret() {
+    local value="$1"
+
+    if [ ${#value} -gt 12 ]; then
+        printf '%s' "${value:0:8}...${value: -4}"
+    else
+        printf '%s' "${value:0:4}..."
+    fi
+}
+
 # 显示当前设置的函数
 show_current_settings() {
+    local auth_file="$HOME/.codex/auth.json"
+    local auth_key
+
     print_info "当前 Codex 配置："
     echo "----------------------------------------"
 
@@ -1087,24 +1191,34 @@ show_current_settings() {
     fi
 
     echo "----------------------------------------"
+    if [ -f "$auth_file" ]; then
+        auth_key=$(sed -n 's/.*"OPENAI_API_KEY"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$auth_file" | head -n 1)
+        if [ -n "$auth_key" ]; then
+            print_info "认证文件：$auth_file（API Key：$(mask_secret "$auth_key")）"
+        else
+            print_info "认证文件：$auth_file（未包含 API Key，可能是 ChatGPT 登录）"
+        fi
+    else
+        print_info "未找到认证文件：$auth_file"
+    fi
+
+    echo "----------------------------------------"
     print_info "环境变量："
 
-    if [ ! -z "$OPENAI_BASE_URL" ]; then
+    if [ -n "$OPENAI_BASE_URL" ]; then
         print_info "OPENAI_BASE_URL：$OPENAI_BASE_URL"
     else
         print_info "OPENAI_BASE_URL：未设置"
     fi
 
-    if [ ! -z "$OPENAI_API_KEY" ]; then
-        local masked_key="${OPENAI_API_KEY:0:8}...${OPENAI_API_KEY: -4}"
-        print_info "OPENAI_API_KEY：$masked_key"
+    if [ -n "$OPENAI_API_KEY" ]; then
+        print_info "OPENAI_API_KEY：$(mask_secret "$OPENAI_API_KEY")"
     else
         print_info "OPENAI_API_KEY：未设置"
     fi
 
-    if [ ! -z "$CODEX_API_KEY" ]; then
-        local masked_key="${CODEX_API_KEY:0:8}...${CODEX_API_KEY: -4}"
-        print_info "CODEX_API_KEY：$masked_key"
+    if [ -n "$CODEX_API_KEY" ]; then
+        print_info "CODEX_API_KEY：$(mask_secret "$CODEX_API_KEY")"
     else
         print_info "CODEX_API_KEY：未设置"
     fi
@@ -1121,31 +1235,40 @@ main() {
     if ! normalize_network_region; then
         exit 1
     fi
-    
+
     # 如果要求则显示当前设置并退出
     if [ "$SHOW_SETTINGS" = true ]; then
         show_current_settings
         exit 0
     fi
-    
-    # 如果未提供URL或密钥则进入交互模式
-    if [ -z "$BASE_URL" ] && [ -z "$API_KEY" ]; then
+
+    # 未提供URL或密钥时交互输入
+    if [ -z "$BASE_URL" ] || [ -z "$API_KEY" ]; then
         print_info "进入交互配置模式"
         echo ""
-        
-        # 获取基础URL
-        read -p "请输入 API 地址 [$DEFAULT_BASE_URL]: " input_url
-        BASE_URL="${input_url:-$DEFAULT_BASE_URL}"
-        
-        # 获取API密钥
-        while [ -z "$API_KEY" ]; do
-            read -p "请输入 API Key: " API_KEY
+
+        if [ -z "$BASE_URL" ]; then
+            prompt_input "请输入 API 地址 [$DEFAULT_BASE_URL]: " input_url
+            BASE_URL="${input_url:-$DEFAULT_BASE_URL}"
+        fi
+
+        if [ -z "$MODEL" ]; then
+            prompt_input "请输入模型名称 [$DEFAULT_MODEL]: " input_model
+            MODEL="${input_model:-$DEFAULT_MODEL}"
+        fi
+
+        local attempts=0
+        while [ -z "$API_KEY" ] && [ "$attempts" -lt 5 ]; do
+            prompt_input "请输入 API Key: " API_KEY
+            attempts=$((attempts + 1))
             if [ -z "$API_KEY" ]; then
                 print_warning "API Key 不能为空"
             fi
         done
     fi
-    
+
+    MODEL="${MODEL:-$DEFAULT_MODEL}"
+
     # 验证输入
     if [ -z "$BASE_URL" ] || [ -z "$API_KEY" ]; then
         print_error "API 地址和 API Key 都不能为空"
@@ -1153,93 +1276,63 @@ main() {
         exit 1
     fi
 
-    if ! validate_api_key "$API_KEY"; then
-        exit 1
-    fi
-    
     # 移除URL末尾的斜杠
     BASE_URL="${BASE_URL%/}"
-    
+
+    if ! validate_base_url "$BASE_URL" || ! validate_api_key "$API_KEY" || ! validate_simple_value "模型名称" "$MODEL"; then
+        exit 1
+    fi
+
     print_info "本次配置："
-    print_info "  API 地址：$BASE_URL"
+    print_info "  API 地址：$BASE_URL（Codex 请求地址：$BASE_URL/responses）"
+    print_info "  模型：$MODEL"
     print_info "  网络方案：$(network_region_label)"
-    
-    # 隐藏API密钥用于显示
-    if [ ${#API_KEY} -gt 12 ]; then
-        masked_key="${API_KEY:0:8}...${API_KEY: -4}"
-    else
-        masked_key="${API_KEY:0:4}..."
-    fi
-    print_info "  API Key：$masked_key"
+    print_info "  API Key：$(mask_secret "$API_KEY")"
     echo ""
-    
-    # 测试API连接
-    if ! test_api_connection "$BASE_URL" "$API_KEY"; then
-        if [ "$TEST_ONLY" = true ]; then
-            exit 1
-        fi
-        print_warning "API 测试失败，仍将继续写入配置。"
-    fi
-    
-    # 如果仅测试则退出
-    if [ "$TEST_ONLY" = true ]; then
-        print_success "API 测试已完成"
-        exit 0
-    fi
-    
+
     # 备份现有配置
     backup_config
-    
+
     # 创建Codex配置
-    if ! create_codex_config "$BASE_URL"; then
+    if ! create_codex_config "$BASE_URL" "$MODEL"; then
         print_error "创建 Codex 配置失败"
         exit 1
     fi
-    
-    # 设置环境变量
+
+    # 写入认证文件（Codex 实际使用的 Key）
+    if ! write_codex_auth "$API_KEY"; then
+        print_error "写入 Codex 认证文件失败"
+        exit 1
+    fi
+
+    # 同步环境变量（兼容旧配置，Codex 不再依赖它们）
     if ! set_environment_variable "$BASE_URL" "$API_KEY"; then
-        print_warning "自动设置环境变量失败"
-        print_info "请手动设置："
-        print_info "  export OPENAI_BASE_URL=\"$BASE_URL\""
-        print_info "  export OPENAI_API_KEY=\"$API_KEY\""
-        print_info "  export CODEX_API_KEY=\"$API_KEY\""
+        print_warning "自动设置环境变量失败，不影响 Codex 使用。"
     fi
 
     echo ""
     print_success "配置已保存"
     print_info "配置文件：$HOME/.codex/config.toml"
+    print_info "认证文件：$HOME/.codex/auth.json"
     echo
 
-    # 检查 Codex 是否已安装，未安装时自动安装
+    # 检查 Codex 是否已安装，未安装时自动安装，已安装则检查升级
     if ensure_codex; then
         print_success "Codex 已安装，可以开始使用！"
-        print_info "可运行 'codex --version' 验证"
+        print_info "直接运行 'codex' 即可开始使用。"
+        if [ "$NETWORK_REGION" = "cn" ]; then
+            print_info "如提示 codex: command not found，请重新打开终端（已将 \$HOME/.local/bin 加入 PATH）。"
+        fi
     else
         print_warning "Codex 未安装。如需手动安装："
         if [ "$NETWORK_REGION" = "cn" ]; then
             print_info "1. 从 $CN_NODE_DIST_URL 下载 Node.js latest LTS"
-            print_info "2. 运行：npm install -g @openai/codex --registry $CN_NPM_REGISTRY"
+            print_info "2. 运行：npm install -g @openai/codex@latest --registry $CN_NPM_REGISTRY"
         else
             print_info "1. 从 https://nodejs.org/ 安装 Node.js latest LTS"
-            print_info "2. 运行：npm install -g @openai/codex --no-audit --no-fund --loglevel=error"
+            print_info "2. 运行：npm install -g @openai/codex@latest --no-audit --no-fund --loglevel=error"
         fi
     fi
-
-    echo
-    print_info "如需在当前会话立即生效，请运行："
-
-    # 根据检测到的shell提供正确的命令
-    local current_shell=$(basename "$SHELL" 2>/dev/null || echo "bash")
-    if [ "$current_shell" = "fish" ]; then
-        print_info "  set -x OPENAI_BASE_URL \"$BASE_URL\""
-        print_info "  set -x OPENAI_API_KEY \"$API_KEY\""
-        print_info "  set -x CODEX_API_KEY \"$API_KEY\""
-    else
-        print_info "  export OPENAI_BASE_URL=\"$BASE_URL\""
-        print_info "  export OPENAI_API_KEY=\"$API_KEY\""
-        print_info "  export CODEX_API_KEY=\"$API_KEY\""
-    fi
-    print_info "或者重新打开终端。"
 
     # 显示当前设置
     echo ""
