@@ -782,8 +782,11 @@ prompt_input() {
     local __var_name="$2"
     local __value=""
 
-    if { read -r -p "$prompt" __value < /dev/tty; } 2>/dev/null; then
-        :
+    # 注意：read -p 的提示输出到 stderr，不能对 read 本身重定向 2>/dev/null，否则提示不可见
+    if [ -t 0 ]; then
+        read -r -p "$prompt" __value || true
+    elif (: < /dev/tty) 2>/dev/null; then
+        read -r -p "$prompt" __value < /dev/tty || true
     else
         read -r -p "$prompt" __value || true
     fi
